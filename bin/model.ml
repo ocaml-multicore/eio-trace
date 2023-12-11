@@ -10,6 +10,7 @@ and item = {
   events : (timestamp * event) array;
   mutable y : int;
   mutable height : int;
+  mutable end_cc_label : timestamp option;
 }
 
 type t = {
@@ -31,17 +32,17 @@ let of_trace (trace : Trace.t) =
   let rec import (item : Trace.item) =
     let events = import_events item.events in
     let end_time = Option.map time item.end_time in
-    let x = { id = item.id; end_time; events; y = 0; height = 0 } in
+    let x = { id = item.id; end_time; events; y = 0; height = 0; end_cc_label = end_time } in
     x
   and import_events events =
     let a = Array.make (List.length events) dummy_event in
-    process a 0 events;
+    process a (Array.length a - 1) events;
     a
   and process arr i = function
     | [] -> ()
     | (ts, x) :: xs ->
       arr.(i) <- (time ts, map_event import x);
-      process arr (i + 1) xs
+      process arr (i - 1) xs
   in
   { start_time; root = import root }
 
@@ -50,11 +51,16 @@ let layout t =
     Fmt.epr "%d is at %d@." i.id y;
     i.y <- y;
     let max_cc_height = ref 1 in
-    i.events |> Array.iter (fun (_, e) ->
+    let have_cc = ref false in
+    i.events |> Array.iter (fun (ts, e) ->
         match e with
         | Log _ | Add_fiber _ -> ()
         | Create_cc (_, child) ->
           Fmt.epr "%d creates cc %d@." i.id child.id;
+          if not !have_cc then (
+              i.end_cc_label <- Some ts;
+              have_cc := true
+            );
           visit ~y child;
           max_cc_height := max !max_cc_height child.height
       );

@@ -29,6 +29,7 @@ module type CANVAS = sig
   val stroke : context -> unit
   val stroke_preserve : context -> unit
   val fill : context -> unit
+  val fill_preserve : context -> unit
   val text_extents : context -> string -> text_extents
   val paint_text : context -> ?clip_area:(float * float) -> x:float -> y:float -> string -> unit
   val paint : ?alpha:float -> context -> unit
@@ -56,9 +57,9 @@ module Make (C : CANVAS) = struct
       let x =
         if x < 4.0 then min 4.0 (max_x -. text_width)
         else x in
-        C.paint_text cr ~x ~y msg
+      C.paint_text cr ~x ~y msg
     )
-     
+
   let bracket_width = 4.
 
   let draw_l_bracket cr ~x ~y ~w ~h =
@@ -77,12 +78,37 @@ module Make (C : CANVAS) = struct
     C.line_to cr ~x:(x -. w) ~y:(y +. h);
     C.stroke cr
 
-  let rec render_events v cr events =
-    events |> Array.iter @@ fun (ts, e) ->
-    match (e : Model.event) with
-    | Add_fiber f -> render_fiber v cr ts f
-    | Create_cc (ty, cc) -> render_cc v cr ts cc ty
-    | Log _ -> ()
+  let rec render_events v cr (item : Model.item) =
+    for i = 0 to Array.length item.events - 1 do
+      let (ts, e) = item.events.(i) in
+      let next =
+        if i < Array.length item.events - 1 then
+          Some (fst (item.events.(i + 1)))
+        else item.end_time
+      in
+      match (e : Model.event) with
+      | Add_fiber f -> render_fiber v cr ts f
+      | Create_cc (ty, cc) -> render_cc v cr ts cc ty
+      | Log msg ->
+        let x = View.x_of_time v ts in
+        let y = float item.y *. line_spacing +. 10. in
+        C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:0.0;
+        C.move_to cr ~x ~y;
+        C.line_to cr ~x:(x -. 5.0) ~y:(y -. 5.0);
+        C.line_to cr ~x:(x +. 5.0) ~y:(y -. 5.0);
+        C.line_to cr ~x ~y;
+        C.fill_preserve cr;
+        C.line_to cr ~x ~y:(y +. 14.);
+        C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+        C.stroke cr;
+        C.set_font_size cr big_text;
+        let clip_area = next |> Option.map (fun t2 ->
+            let x2 = View.x_of_time v t2 in
+            (x2 -. x -. 2.0, v.height)
+          ) in
+        C.paint_text cr ~x:(x +. 2.) ~y:(y +. 12.) msg
+          ?clip_area
+    done
 
   and render_fiber v cr start_time (f : Model.item) =
     let x = View.x_of_time v start_time in
@@ -96,14 +122,16 @@ module Make (C : CANVAS) = struct
     C.rectangle cr ~x ~y ~w ~h:14.0;
     C.fill cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    let label = Printf.sprintf "fiber-%d" f.id in
-    C.set_font_size cr big_text;
+    (*
+  let label = string_of_int f.id in
+  C.set_font_size cr big_text;
     draw_label v cr ~min_x:x ~max_x:(x +. w) ~x ~y:(y +. 12.) label;
-    render_events v cr f.events
+    *)
+    render_events v cr f
 
   and render_cc v cr start_time (cc : Model.item) ty =
-    render_events v cr cc.events;
-    let label = Printf.sprintf "%s-%d" (Eio_runtime_events.cc_ty_to_string ty) cc.id in
+    render_events v cr cc;
+    let label = Eio_runtime_events.cc_ty_to_string ty in
     let x = View.x_of_time v start_time in
     let y = float cc.y *. line_spacing in
     let w =
@@ -116,7 +144,14 @@ module Make (C : CANVAS) = struct
     draw_r_bracket cr ~x:(x +. w) ~y ~w ~h; 
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
     C.set_font_size cr small_text;
-    draw_label v cr ~min_x:x ~max_x:(x +. w) ~x:(x +. 2.) ~y:(y +. 8.) label
+    let clip_width =
+      match cc.end_cc_label with
+      | Some t ->
+        Fmt.epr "cc %d next event is at %f (ends at %f)@." cc.id t (Option.get cc.end_time);
+        View.x_of_time v t -. x
+      | None -> w
+    in
+    C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) ~clip_area:(clip_width -. 2., v.height) label
 
   let render_grid v cr =
     C.set_line_width cr 1.0;
@@ -147,5 +182,5 @@ module Make (C : CANVAS) = struct
     C.paint cr;
     render_grid v cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    render_events v cr v.model.root.events
+    render_events v cr v.model.root
 end
