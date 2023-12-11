@@ -1,0 +1,4 @@
+(executable
+ (public_name eio-trace)
+ (name main)
+ (libraries eio.runtime_events fmt lablgtk3 cmdliner))
