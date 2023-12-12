@@ -111,15 +111,23 @@ module Make (C : CANVAS) = struct
     done
 
   and render_fiber v cr start_time (f : Model.item) =
+    let y = float f.y *. line_spacing in
+    let draw_act (t0, t1) =
+      let x = View.x_of_time v t0 in
+      let w = View.x_of_time v t1 -. x in
+      C.rectangle cr ~x ~y:(y +. 8.) ~w ~h:18.;
+    in
+    C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:0.0;
+    Array.iter draw_act f.activations;
+    C.fill cr;
     let x = View.x_of_time v start_time in
-    let y = float f.y *. line_spacing +. 10. in
     let w =
       match f.end_time with
-      | None -> v.width -. x
+      | None -> v.width -. min x 0.
       | Some stop -> View.x_of_time v stop -. x
     in
     C.set_source_rgb cr ~r:0.7 ~g:0.7 ~b:1.0;
-    C.rectangle cr ~x ~y ~w ~h:14.0;
+    C.rectangle cr ~x ~y:(y +. 10.) ~w ~h:14.0;
     C.fill cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
     (*

@@ -13,11 +13,12 @@ and item = {
   mutable events : (timestamp * event) list;
   mutable inner_cc : int;
   mutable end_time : timestamp option;
+  mutable activations : timestamp list
 }
 
 type t = {
   mutable root : (timestamp * item) option;
-  mutable current_fiber : int Domains.t;
+  mutable current_fiber : int Domains.t;        (* Head of its activation is a resume *)
   mutable items : item Ids.t;
 }
 
@@ -42,7 +43,7 @@ let get t id =
   match Ids.find_opt id t.items with
   | Some x -> x
   | None ->
-    let x = { id; events = []; inner_cc = id; parent = None; end_time = None } in
+    let x = { id; events = []; activations = []; inner_cc = id; parent = None; end_time = None } in
     t.items <- Ids.add id x t.items;
     x
 
@@ -61,7 +62,17 @@ let callbacks t =
        Fmt.epr "%a@." Eio_runtime_events.pp_event e;
        match e with
        | `Fiber id ->
-         t.current_fiber <- Domains.add ring id t.current_fiber
+         let run () =
+           t.current_fiber <- Domains.add ring id t.current_fiber;
+           let f = get t id in
+           f.activations <- ts :: f.activations
+         in
+         begin
+           match current_fiber t ring with
+           | Some old when old.id = id -> ()
+           | Some old -> old.activations <- ts :: old.activations; run ()
+           | None -> run ()
+         end
        | `Create (id, detail) ->
          let x = get t id in
          begin match detail with
@@ -89,6 +100,13 @@ let callbacks t =
        | `Exit_fiber id ->
          let item = get t id in
          item.end_time <- Some ts;
+         begin
+           match current_fiber t ring with
+           | Some f when f.id = id ->
+             t.current_fiber <- Domains.remove ring t.current_fiber;
+             item.activations <- ts :: item.activations
+           | _ -> ()
+         end
        | `Log msg ->
          current_item t ring |> Option.iter @@ fun fiber ->
          fiber.events <- (ts, Log msg) :: fiber.events
