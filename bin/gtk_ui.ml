@@ -49,19 +49,31 @@ let create model =
       true
     );
   area#misc#set_app_paintable true;
-  area#event#add [`SCROLL; `BUTTON1_MOTION; `BUTTON_PRESS];
+  area#event#add [`SCROLL; `SMOOTH_SCROLL; `BUTTON1_MOTION; `BUTTON_PRESS];
   area#event#connect#scroll ==> (fun ev ->
       let x = GdkEvent.Scroll.x ev in
       let t_at_pointer = View.time_of_x v x in
       let redraw_zoomed () =
         let t_new_at_pointer = View.time_of_x v x in
         View.set_start_time v (v.start_time -. (t_new_at_pointer -. t_at_pointer));
-        redraw () in
-      begin match GdkEvent.Scroll.direction ev with
-        | `UP -> View.zoom v 1.2; set_scollbars (); redraw_zoomed ()
-        | `DOWN -> View.zoom v (1. /. 1.2); redraw_zoomed (); set_scollbars ()
-        | _ -> () end;
-      true
+        redraw ()
+      in
+      let zoom diff =
+        if diff > 0.0 then (
+          View.zoom v diff;
+          set_scollbars ()
+        ) else (
+          set_scollbars ();
+          View.zoom v diff
+        );
+        redraw_zoomed ();
+        true
+      in
+      match GdkEvent.Scroll.direction ev with
+      | `UP -> zoom 0.2
+      | `DOWN -> zoom (-0.2)
+      | `SMOOTH -> zoom ((-. GdkEvent.Scroll.delta_y ev) /. 8.0)
+      | _ -> false
     );
 
   let drag_start = ref None in
