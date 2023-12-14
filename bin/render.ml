@@ -87,7 +87,12 @@ module Make (C : CANVAS) = struct
         else item.end_time
       in
       match (e : Model.event) with
-      | Add_fiber f -> render_fiber v cr ts f
+      | Add_fiber f ->
+        render_fiber v cr ts f;
+        let x = View.x_of_time v ts in
+        C.move_to cr ~x ~y:(( 0.5 +.float item.y) *. line_spacing);
+        C.line_to cr ~x ~y:(( 0.5 +.float f.y) *. line_spacing);
+        C.stroke cr
       | Create_cc (ty, cc) -> render_cc v cr ts cc ty
       | Log msg ->
         let x = View.x_of_time v ts in
