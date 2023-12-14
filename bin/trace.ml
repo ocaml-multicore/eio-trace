@@ -13,7 +13,7 @@ and item = {
   mutable events : (timestamp * event) list;
   mutable inner_cc : int;
   mutable end_time : timestamp option;
-  mutable activations : timestamp list
+  mutable activations : (timestamp * [`Run | `Suspend of string | `Finish]) list
 }
 
 type t = {
@@ -49,6 +49,26 @@ let get t id =
 
 let pp_item f x = Fmt.int f x.id
 
+let is_running x =
+  match x.activations with
+  | (_, `Run) :: _ -> true
+  | _ -> false
+
+let set_fiber t ring ts id =
+  let run () =
+    t.current_fiber <- Domains.add ring id t.current_fiber;
+    let f = get t id in
+    f.activations <- (ts, `Run) :: f.activations
+  in
+  match current_fiber t ring with
+  | Some old when old.id = id && is_running old -> ()
+  | Some old ->
+    begin match old.activations with
+      | (_, `Run) :: _ -> old.activations <- (ts, `Suspend "") :: old.activations; run ()
+      | _ -> run ()
+    end;
+  | None -> run ()
+
 let callbacks t =
   Runtime_events.Callbacks.create ()
     (* Uncomment to trace GC events too: *)
@@ -61,24 +81,14 @@ let callbacks t =
     (fun ring ts e ->
        Fmt.epr "%a@." Eio_runtime_events.pp_event e;
        match e with
-       | `Fiber id ->
-         let run () =
-           t.current_fiber <- Domains.add ring id t.current_fiber;
-           let f = get t id in
-           f.activations <- ts :: f.activations
-         in
-         begin
-           match current_fiber t ring with
-           | Some old when old.id = id -> ()
-           | Some old -> old.activations <- ts :: old.activations; run ()
-           | None -> run ()
-         end
+       | `Fiber id -> set_fiber t ring ts id
        | `Create (id, detail) ->
          let x = get t id in
          begin match detail with
            | `Fiber_in cc ->
              let cc = Ids.find cc t.items in
              x.parent <- Some cc;
+             set_fiber t ring ts id;
              cc.events <- (ts, Add_fiber x) :: cc.events;
            | `Cc ty ->
              let current = current_fiber t ring in
@@ -104,14 +114,26 @@ let callbacks t =
            match current_fiber t ring with
            | Some f when f.id = id ->
              t.current_fiber <- Domains.remove ring t.current_fiber;
-             item.activations <- ts :: item.activations
+             begin match f.activations with
+               | (_, `Suspend _) :: _ -> f.activations <- (ts, `Run) :: f.activations
+               | _ -> ()
+             end;
+             f.activations <- (ts, `Finish) :: f.activations
            | _ -> ()
          end
        | `Log msg ->
-         current_item t ring |> Option.iter @@ fun fiber ->
-         fiber.events <- (ts, Log msg) :: fiber.events
+         current_item t ring |> Option.iter @@ fun item ->
+         item.events <- (ts, Log msg) :: item.events
        | `Name (id, name) ->
          let item = get t id in
          item.events <- (ts, Log name) :: item.events
+       | `Suspend_fiber op ->
+         current_fiber t ring |> Option.iter @@ fun fiber ->
+         begin match fiber.activations with
+           | (_, `Suspend _) :: _ -> fiber.activations <- (ts, `Run) :: fiber.activations
+           | _ -> ()
+         end;
+
+         fiber.activations <- (ts, `Suspend op) :: fiber.activations
        | _ -> ()
     )

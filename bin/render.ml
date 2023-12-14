@@ -36,11 +36,19 @@ module type CANVAS = sig
   val clip_extents : context -> rectangle
 end
 
-let line_spacing = 32.
-let big_text = 12.
-let small_text = 8.
-
 module Make (C : CANVAS) = struct
+  module Style = struct
+    let line_spacing = 32.
+    let big_text = 12.
+    let small_text = 8.
+
+    let fiber_padding_top = 10.0
+    let fiber_height = 14.0
+
+    let running_fiber cr =
+        C.set_source_rgb cr ~r:0.4 ~g:0.8 ~b:0.4
+  end
+
   (** Draw [msg] in the area (min_x, max_x) and ideally centred at [x]. *)
   let draw_label (v : View.t) cr ~min_x ~max_x ~x ~y msg =
     let text_width = C.((text_extents cr msg).x_advance) in
@@ -89,79 +97,84 @@ module Make (C : CANVAS) = struct
       match (e : Model.event) with
       | Add_fiber f ->
         render_fiber v cr ts f;
+        Style.running_fiber cr;
         let x = View.x_of_time v ts in
-        C.move_to cr ~x ~y:(( 0.5 +.float item.y) *. line_spacing);
-        C.line_to cr ~x ~y:(( 0.5 +.float f.y) *. line_spacing);
+        C.move_to cr ~x ~y:(float item.y *. Style.line_spacing +. Style.fiber_padding_top);
+        C.line_to cr ~x ~y:(float f.y *. Style.line_spacing +. Style.fiber_padding_top +. Style.fiber_height);
         C.stroke cr
       | Create_cc (ty, cc) -> render_cc v cr ts cc ty
       | Log msg ->
         let x = View.x_of_time v ts in
-        let y = float item.y *. line_spacing +. 10. in
-        C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:0.0;
-        C.move_to cr ~x ~y;
-        C.line_to cr ~x:(x -. 5.0) ~y:(y -. 5.0);
-        C.line_to cr ~x:(x +. 5.0) ~y:(y -. 5.0);
-        C.line_to cr ~x ~y;
-        C.fill_preserve cr;
-        C.line_to cr ~x ~y:(y +. 14.);
+        let y = float item.y *. Style.line_spacing +. 10. in
+        C.move_to cr ~x ~y:(y +. 3.);
+        C.line_to cr ~x ~y:(y -. 3.);
         C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
         C.stroke cr;
-        C.set_font_size cr big_text;
+        C.set_font_size cr Style.small_text;
         let clip_area = next |> Option.map (fun t2 ->
             let x2 = View.x_of_time v t2 in
             (x2 -. x -. 2.0, v.height)
           ) in
-        C.paint_text cr ~x:(x +. 2.) ~y:(y +. 12.) msg
+        C.paint_text cr ~x:(x +. 2.) ~y:(y -. 2.) msg
           ?clip_area
     done
 
-  and render_fiber v cr start_time (f : Model.item) =
-    let y = float f.y *. line_spacing in
-    let draw_act (t0, t1) =
-      let x = View.x_of_time v t0 in
-      let w = View.x_of_time v t1 -. x in
-      C.rectangle cr ~x ~y:(y +. 8.) ~w ~h:18.;
-    in
-    C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:0.0;
-    Array.iter draw_act f.activations;
-    C.fill cr;
+  and render_fiber v cr _start_time (f : Model.item) =
+    let y = float f.y *. Style.line_spacing in
+(*
     let x = View.x_of_time v start_time in
     let w =
       match f.end_time with
       | None -> v.width -. min x 0.
       | Some stop -> View.x_of_time v stop -. x
     in
-    C.set_source_rgb cr ~r:0.7 ~g:0.7 ~b:1.0;
-    C.rectangle cr ~x ~y:(y +. 10.) ~w ~h:14.0;
-    C.fill cr;
-    C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    (*
-  let label = string_of_int f.id in
-  C.set_font_size cr big_text;
-    draw_label v cr ~min_x:x ~max_x:(x +. w) ~x ~y:(y +. 12.) label;
-    *)
+*)
+    C.set_font_size cr Style.big_text;
+    for i = 0 to Array.length f.activations - 1 do
+      let op, t0, t1 = f.activations.(i) in
+      let x0 = View.x_of_time v t0 in
+      let x1 = View.x_of_time v t1 in
+      let w = x1 -. x0 in
+(*
+      C.rectangle cr ~x:x0 ~y:(y +. 8.) ~w ~h:18.;
+      C.fill cr;
+*)
+      Style.running_fiber cr;
+      C.rectangle cr ~x:x0 ~y:(y +. 10.) ~w ~h:14.0;
+      C.fill cr;
+      if i < Array.length f.activations - 1 then (
+        let _, t2, _ = f.activations.(i + 1) in
+        let x2 = View.x_of_time v t2 in
+        let w = x2 -. x1 in
+        C.set_source_rgb cr ~r:0.4 ~g:0.4 ~b:0.4;
+        C.rectangle cr ~x:x1 ~y:(y +. 10.) ~w ~h:14.;
+        C.fill cr;
+        C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0;
+        let clip_area = (w -. 2.0, v.height) in
+        C.paint_text cr ~x:(x1 +. 2.) ~y:(y +. 22.) op
+          ~clip_area
+      )
+    done;
     render_events v cr f
 
   and render_cc v cr start_time (cc : Model.item) ty =
     render_events v cr cc;
     let label = Eio_runtime_events.cc_ty_to_string ty in
     let x = View.x_of_time v start_time in
-    let y = float cc.y *. line_spacing in
+    let y = float cc.y *. Style.line_spacing in
     let w =
       match cc.end_time with
       | None -> v.width -. x
       | Some stop -> View.x_of_time v stop -. x
     in
-    let h = float cc.height *. line_spacing -. 4. in
+    let h = float cc.height *. Style.line_spacing -. 4. in
+    C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
     draw_l_bracket cr ~x ~y ~w ~h; 
     draw_r_bracket cr ~x:(x +. w) ~y ~w ~h; 
-    C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    C.set_font_size cr small_text;
+    C.set_font_size cr Style.small_text;
     let clip_width =
       match cc.end_cc_label with
-      | Some t ->
-        Fmt.epr "cc %d next event is at %f (ends at %f)@." cc.id t (Option.get cc.end_time);
-        View.x_of_time v t -. x
+      | Some t -> View.x_of_time v t -. x
       | None -> w
     in
     C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) ~clip_area:(clip_width -. 2., v.height) label

@@ -11,7 +11,7 @@ and item = {
   mutable y : int;
   mutable height : int;
   mutable end_cc_label : timestamp option;
-  mutable activations : (timestamp * timestamp) array;
+  mutable activations : (string * timestamp * timestamp) array;
 }
 
 type t = {
@@ -38,13 +38,23 @@ let of_trace (trace : Trace.t) =
     x
   and import_activations xs =
     let n_act = List.length xs in
-    let arr = Array.make (n_act / 2) (0.0, 0.0) in
+    let arr = Array.make (n_act / 2) ("", 0.0, 0.0) in
     let rec aux i = function
       | [] -> arr
-      | t1 :: t0 :: xs ->
-        arr.(i) <- (time t0, time t1);
+      | (t1, `Finish) :: (t0, `Run) :: xs ->
+        arr.(i) <- ("finish", time t0, time t1);
         aux (i - 1) xs
-      | [_] -> assert false
+      | (t1, `Suspend op) :: (t0, `Run) :: xs ->
+        arr.(i) <- (op, time t0, time t1);
+        aux (i - 1) xs
+      | (_, b) :: (_, a) :: _ ->
+        let pp f = function
+          | `Finish -> Fmt.string f "finish"
+          | `Run -> Fmt.string f "run"
+          | `Suspend op -> Fmt.pf f "suspend(%s)" op
+        in
+        Fmt.failwith "got %a %a@." pp a pp b;
+      | _ -> assert false
     in
     aux (Array.length arr - 1) xs
   and import_events events =
