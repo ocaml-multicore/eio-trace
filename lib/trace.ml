@@ -13,7 +13,7 @@ and item = {
   mutable events : (timestamp * event) list;
   mutable inner_cc : int;
   mutable end_time : timestamp option;
-  mutable activations : (timestamp * [`Run | `Suspend of string | `Finish]) list
+  mutable activations : (timestamp * [`Span of string | `Suspend of string] list) list
 }
 
 type t = {
@@ -47,27 +47,35 @@ let get t id =
     t.items <- Ids.add id x t.items;
     x
 
+let get_stack fiber =
+  match fiber.activations with
+  | [] -> []
+  | (_, x) :: _ -> x
+
 let pp_item f x = Fmt.int f x.id
 
 let is_running x =
   match x.activations with
-  | (_, `Run) :: _ -> true
-  | _ -> false
+  | (_, `Suspend _ :: _) :: _ -> false
+  | _ -> true
 
 let set_fiber t ring ts id =
   let run () =
     t.current_fiber <- Domains.add ring id t.current_fiber;
     let f = get t id in
-    f.activations <- (ts, `Run) :: f.activations
+    let stack =
+      match get_stack f with
+      | `Suspend _ :: xs -> xs
+      | xs -> xs
+    in
+    f.activations <- (ts, stack) :: f.activations
   in
   match current_fiber t ring with
   | Some old when old.id = id && is_running old -> ()
-  | Some old ->
-    begin match old.activations with
-      | (_, `Run) :: _ -> old.activations <- (ts, `Suspend "") :: old.activations; run ()
-      | _ -> run ()
-    end;
-  | None -> run ()
+  | Some old when is_running old ->
+    let stack = `Suspend "" :: get_stack old in
+    old.activations <- (ts, stack) :: old.activations; run ()
+  | _ -> run ()
 
 let callbacks t =
   Runtime_events.Callbacks.create ()
@@ -114,11 +122,7 @@ let callbacks t =
            match current_fiber t ring with
            | Some f when f.id = id ->
              t.current_fiber <- Domains.remove ring t.current_fiber;
-             begin match f.activations with
-               | (_, `Suspend _) :: _ -> f.activations <- (ts, `Run) :: f.activations
-               | _ -> ()
-             end;
-             f.activations <- (ts, `Finish) :: f.activations
+             f.activations <- (ts, []) :: f.activations
            | _ -> ()
          end
        | `Log msg ->
@@ -127,13 +131,21 @@ let callbacks t =
        | `Name (id, name) ->
          let item = get t id in
          item.events <- (ts, Log name) :: item.events
+       | `Enter_span op ->
+         current_fiber t ring |> Option.iter @@ fun fiber ->
+         let stack = `Span op :: get_stack fiber in
+         fiber.activations <- (ts, stack) :: fiber.activations
+       | `Exit_span ->
+         current_fiber t ring |> Option.iter @@ fun fiber ->
+         let stack =
+           match get_stack fiber with
+           | `Span _ :: xs -> xs
+           | xs -> xs
+         in
+         fiber.activations <- (ts, stack) :: fiber.activations
        | `Suspend_fiber op ->
          current_fiber t ring |> Option.iter @@ fun fiber ->
-         begin match fiber.activations with
-           | (_, `Suspend _) :: _ -> fiber.activations <- (ts, `Run) :: fiber.activations
-           | _ -> ()
-         end;
-
-         fiber.activations <- (ts, `Suspend op) :: fiber.activations
+         let stack = `Suspend op :: get_stack fiber in
+         fiber.activations <- (ts, stack) :: fiber.activations
        | _ -> ()
     )

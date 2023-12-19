@@ -11,7 +11,7 @@ and item = {
   mutable y : int;
   mutable height : int;
   mutable end_cc_label : timestamp option;
-  mutable activations : (string * timestamp * timestamp) array;
+  mutable activations : (timestamp * [ `Span of string | `Suspend of string ] list) array;
 }
 
 type t = {
@@ -30,6 +30,7 @@ let of_trace (trace : Trace.t) =
   let start_time, root = Option.get trace.root in
   let start_time = Runtime_events.Timestamp.to_int64 start_time in
   let time ts = Int64.sub (Runtime_events.Timestamp.to_int64 ts) start_time |> Int64.to_float in
+  let import_stack (ts, stack) = (time ts, stack) in
   let rec import (item : Trace.item) =
     let events = import_events item.events in
     let activations = import_activations item.activations in
@@ -37,26 +38,7 @@ let of_trace (trace : Trace.t) =
     let x = { id = item.id; end_time; events; activations; y = 0; height = 0; end_cc_label = end_time } in
     x
   and import_activations xs =
-    let n_act = List.length xs in
-    let arr = Array.make (n_act / 2) ("", 0.0, 0.0) in
-    let rec aux i = function
-      | [] -> arr
-      | (t1, `Finish) :: (t0, `Run) :: xs ->
-        arr.(i) <- ("finish", time t0, time t1);
-        aux (i - 1) xs
-      | (t1, `Suspend op) :: (t0, `Run) :: xs ->
-        arr.(i) <- (op, time t0, time t1);
-        aux (i - 1) xs
-      | (_, b) :: (_, a) :: _ ->
-        let pp f = function
-          | `Finish -> Fmt.string f "finish"
-          | `Run -> Fmt.string f "run"
-          | `Suspend op -> Fmt.pf f "suspend(%s)" op
-        in
-        Fmt.failwith "got %a %a@." pp a pp b;
-      | _ -> assert false
-    in
-    aux (Array.length arr - 1) xs
+    List.rev xs |> List.map import_stack |> Array.of_list
   and import_events events =
     let a = Array.make (List.length events) dummy_event in
     process a (Array.length a - 1) events;

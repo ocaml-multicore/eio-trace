@@ -119,7 +119,7 @@ module Make (C : CANVAS) = struct
           ?clip_area
     done
 
-  and render_fiber v cr _start_time (f : Model.item) =
+  and render_fiber v cr start_time (f : Model.item) =
     let y = float f.y *. Style.line_spacing in
 (*
     let x = View.x_of_time v start_time in
@@ -130,31 +130,36 @@ module Make (C : CANVAS) = struct
     in
 *)
     C.set_font_size cr Style.big_text;
-    for i = 0 to Array.length f.activations - 1 do
-      let op, t0, t1 = f.activations.(i) in
-      let x0 = View.x_of_time v t0 in
-      let x1 = View.x_of_time v t1 in
-      let w = x1 -. x0 in
-(*
-      C.rectangle cr ~x:x0 ~y:(y +. 8.) ~w ~h:18.;
-      C.fill cr;
-*)
-      Style.running_fiber cr;
-      C.rectangle cr ~x:x0 ~y:(y +. 10.) ~w ~h:14.0;
-      C.fill cr;
-      if i < Array.length f.activations - 1 then (
-        let _, t2, _ = f.activations.(i + 1) in
-        let x2 = View.x_of_time v t2 in
-        let w = x2 -. x1 in
-        C.set_source_rgb cr ~r:0.4 ~g:0.4 ~b:0.4;
-        C.rectangle cr ~x:x1 ~y:(y +. 10.) ~w ~h:14.;
+    let prev_stack = ref [] in
+    let event = ref (start_time, []) in
+    f.activations |> Array.iter (fun event' ->
+        let t0, stack = !event in
+        event := event';
+        let t1 = fst event' in
+        let x0 = View.x_of_time v t0 in
+        let x1 = View.x_of_time v t1 in
+        let w = x1 -. x0 in
+        begin match stack with
+          | `Suspend _ :: _ -> C.set_source_rgb cr ~r:0.4 ~g:0.4 ~b:0.4
+          | `Span _ :: _ -> C.set_source_rgb cr ~r:0.5 ~g:0.9 ~b:0.5
+          | [] -> Style.running_fiber cr
+        end;
+        C.rectangle cr ~x:x0 ~y:(y +. 10.) ~w ~h:14.0;
         C.fill cr;
-        C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0;
-        let clip_area = (w -. 2.0, v.height) in
-        C.paint_text cr ~x:(x1 +. 2.) ~y:(y +. 22.) op
-          ~clip_area
-      )
-    done;
+        let label op =
+          let clip_area = (w -. 2.0, v.height) in
+          C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 22.) op
+            ~clip_area
+        in
+        begin match stack with
+          | `Suspend op :: _ -> C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0; label op
+          | `Span op :: p ->
+            C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+            if p == !prev_stack then label op
+          | [] -> ()
+        end;
+        prev_stack := stack
+      );
     render_events v cr f
 
   and render_cc v cr start_time (cc : Model.item) ty =
