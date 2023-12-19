@@ -1,3 +1,5 @@
+open Eio_trace
+
 module Canvas = struct
   include Cairo
 

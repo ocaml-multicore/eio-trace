@@ -1,3 +1,5 @@
+open Eio_trace
+
 let () = Printexc.record_backtrace true
 
 (* Read trace events from [cursor] until [pid] exits. *)
