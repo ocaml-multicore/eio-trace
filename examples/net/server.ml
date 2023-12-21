@@ -1,8 +1,5 @@
 open Eio.Std
 
-(* Prefix all trace output with "server: " *)
-let traceln fmt = traceln ("server: " ^^ fmt)
-
 module Read = Eio.Buf_read
 
 (* Read one line from [client] and respond with "OK". *)

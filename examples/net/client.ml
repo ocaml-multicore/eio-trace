@@ -1,15 +1,12 @@
 open Eio.Std
 
-(* Prefix all trace output with "client: " *)
-let traceln fmt = traceln ("client: " ^^ fmt)
-
 module Read = Eio.Buf_read
 module Write = Eio.Buf_write
 
 (* Connect to [addr] on [net], send a message and then read the reply. *)
 let run ~net ~addr =
+  Switch.run ~name:"client" @@ fun sw ->
   traceln "Connecting to server at %a..." Eio.Net.Sockaddr.pp addr;
-  Switch.run @@ fun sw ->
   let flow = Eio.Net.connect ~sw net addr in
   (* We use a buffered writer here so we can create the message in multiple
      steps but still send it efficiently as a single packet: *)

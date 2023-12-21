@@ -6,6 +6,7 @@ type event =
   | Add_fiber of item
 and item = {
   id : int;
+  name : string option;
   end_time : timestamp option;
   events : (timestamp * event) array;
   mutable y : int;
@@ -35,7 +36,7 @@ let of_trace (trace : Trace.t) =
     let events = import_events item.events in
     let activations = import_activations item.activations in
     let end_time = Option.map time item.end_time in
-    let x = { id = item.id; end_time; events; activations; y = 0; height = 0; end_cc_label = end_time } in
+    let x = { id = item.id; name = item.name; end_time; events; activations; y = 0; height = 0; end_cc_label = end_time } in
     x
   and import_activations xs =
     List.rev xs |> List.map import_stack |> Array.of_list
