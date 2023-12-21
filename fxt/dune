@@ -1,0 +1,4 @@
+(library
+ (name fxt)
+ (public_name eio-trace.fxt)
+ (libraries eio))

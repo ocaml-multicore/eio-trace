@@ -1,8 +1,48 @@
 type timestamp = float    (* ns since start_time *)
 
+module Spans : sig
+  type 'a t
+  (* The history of a stack of spans of type 'a *)
+
+  val create : unit -> 'a t
+
+  val current : 'a t -> 'a list
+
+  val push : 'a t -> timestamp -> 'a -> unit
+  (* [push ts x t] is [t] extended by pushing [x] at time [ts]. *)
+
+  val pop : 'a t -> timestamp -> unit
+  (* [pop ts t] is [t] extended by popping a value at time [ts]. *)
+
+  val history : 'a t -> (timestamp * 'a list) list
+  (* [history t] is the list of snapshots of [t] from earliest to latest. *)
+end = struct
+  type 'a t = (timestamp * 'a list) list ref
+
+  let create () = ref []
+
+  let current t =
+    match !t with
+    | [] -> []
+    | (_, xs) :: _ -> xs
+
+  let push t ts x =
+    t := (ts, (x :: current t)) :: !t
+
+  let pop t ts =
+    let stack =
+      match current t with
+      | _ :: xs -> xs
+      | [] -> []
+    in
+    t := (ts, stack) :: !t
+
+  let history t = List.rev !t
+end
+
 type event =
   | Log of string
-  | Create_cc of Eio_runtime_events.cc_ty * item
+  | Create_cc of string * item
   | Add_fiber of item
 and item = {
   id : int;
@@ -27,11 +67,19 @@ let map_event f : Trace.event -> event = function
 
 let dummy_event = 0., Log ""
 
+let get_id args =
+  List.assoc_opt "id" args
+  |> function
+  | Some (`Pointer x) -> Int64.to_int x
+  | _ -> failwith "Missing ID pointer"
+
+let as_string = function
+  | `String s -> s
+  | _ -> failwith "Not a string"
+
 let of_trace (trace : Trace.t) =
   let start_time, root = Option.get trace.root in
-  let start_time = Runtime_events.Timestamp.to_int64 start_time in
-  let time ts = Int64.sub (Runtime_events.Timestamp.to_int64 ts) start_time |> Int64.to_float in
-  let import_stack (ts, stack) = (time ts, stack) in
+  let time ts = Int64.sub ts start_time |> Int64.to_float in
   let rec import (item : Trace.item) =
     let events = import_events item.events in
     let activations = import_activations item.activations in
@@ -39,16 +87,29 @@ let of_trace (trace : Trace.t) =
     let x = { id = item.id; name = item.name; end_time; events; activations; y = 0; height = 0; end_cc_label = end_time } in
     x
   and import_activations xs =
-    List.rev xs |> List.map import_stack |> Array.of_list
+    let s = Spans.create () in
+    List.rev xs |> List.iter (fun (ts, (e : Trace.activation)) ->
+        let ts = time ts in
+        match e with
+        | `Pause ->
+          begin match Spans.current s with
+            | `Suspend _ :: _ -> ()
+            | _ -> Spans.push s ts (`Suspend "")
+          end
+        | `Enter_span op ->
+          Spans.push s ts (`Span op)
+        | `Exit_span ->
+          Spans.pop s ts
+        | `Fiber _ ->
+          begin match Spans.current s with
+            | `Suspend _ :: _ -> Spans.pop s ts
+            | _ -> ()
+          end
+        | `Suspend_fiber op -> Spans.push s ts (`Suspend op)
+      );
+    Array.of_list (Spans.history s)
   and import_events events =
-    let a = Array.make (List.length events) dummy_event in
-    process a (Array.length a - 1) events;
-    a
-  and process arr i = function
-    | [] -> ()
-    | (ts, x) :: xs ->
-      arr.(i) <- (time ts, map_event import x);
-      process arr (i - 1) xs
+    events |> List.rev |> List.map (fun (ts, x) -> (time ts, map_event import x)) |> Array.of_list
   in
   { start_time; root = import root }
 
@@ -56,21 +117,18 @@ let layout t =
   let rec visit ~y (i : item) =
     Fmt.epr "%d is at %d@." i.id y;
     i.y <- y;
-    let max_cc_height = ref 1 in
-    let have_cc = ref false in
+    i.height <- 1;
     i.events |> Array.iter (fun (ts, e) ->
         match e with
         | Log _ | Add_fiber _ -> ()
         | Create_cc (_, child) ->
-          Fmt.epr "%d creates cc %d@." i.id child.id;
-          if not !have_cc then (
+          Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
+          if i.end_cc_label = None then (
               i.end_cc_label <- Some ts;
-              have_cc := true
             );
           visit ~y child;
-          max_cc_height := max !max_cc_height child.height
+          i.height <- max i.height child.height
       );
-    i.height <- !max_cc_height;
     i.events |> Array.iter (fun (_, e) ->
         match e with
         | Log _ | Create_cc _ -> ()
@@ -81,6 +139,6 @@ let layout t =
       );
     Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
-  visit t.root ~y:(-1)
+  visit t.root ~y:0
 
 let start_time t = t.start_time

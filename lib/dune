@@ -1,4 +1,4 @@
 (library
  (public_name eio-trace)
  (name eio_trace)
- (libraries eio.runtime_events fmt))
+ (libraries eio fxt fmt))

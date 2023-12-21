@@ -164,7 +164,7 @@ module Make (C : CANVAS) = struct
 
   and render_cc v cr start_time (cc : Model.item) ty =
     render_events v cr cc;
-    let label = Option.value cc.name ~default:(Eio_runtime_events.cc_ty_to_string ty) in
+    let label = Option.value cc.name ~default:ty in
     let x = View.x_of_time v start_time in
     let y = float cc.y *. Style.line_spacing in
     let w =
@@ -213,5 +213,5 @@ module Make (C : CANVAS) = struct
     C.paint cr;
     render_grid v cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    render_events v cr v.model.root
+    render_fiber v cr 0.0 v.model.root
 end
