@@ -190,4 +190,5 @@ let main ~proc_mgr ~fs tracefile args =
     (fun () ->
        Fun.protect (fun () -> Eio.Process.await_exn child)
          ~finally:(fun () -> finished := true);
-    )
+    );
+  Ok ()

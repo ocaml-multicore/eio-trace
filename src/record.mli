@@ -3,4 +3,4 @@ val main :
   fs:_ Eio.Path.t ->
   _ Eio.Path.t ->
   string list ->
-  unit
+  (unit, string) result
