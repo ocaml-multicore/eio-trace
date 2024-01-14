@@ -82,6 +82,7 @@ module String_ref = struct
       let i = t.strings.next in
       t.strings.next <- if i = 0x7fff then 1 else i + 1;
       Option.iter (Hashtbl.remove t.strings.to_index) t.strings.to_string.(i);
+      t.strings.to_string.(i) <- Some s;
       Hashtbl.add t.strings.to_index s i;
       let words = strlen s + 1 in
       let data = i64 i ||| (i64 (String.length s) <<< 16) in
@@ -121,6 +122,7 @@ module Thread_ref = struct
       let i = t.threads.next in
       t.threads.next <- if i = 0xff then 1 else i + 1;
       Option.iter (Hashtbl.remove t.threads.to_index) t.threads.to_thread.(i);
+      t.threads.to_thread.(i) <- Some v;
       Hashtbl.add t.threads.to_index v i;
       record t ~words:3 ~data:(i64 i) ~ty:3;
       word t v.pid;
