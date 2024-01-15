@@ -1,5 +1,7 @@
 # eio-trace
 
+Status: early prototype, and requires a development version of Eio
+
 eio-trace can be used to record and display traces of programs using the [Eio][] library.
 
 To install eio-trace:
