@@ -38,7 +38,7 @@ end
 
 module Make (C : CANVAS) = struct
   module Style = struct
-    let line_spacing = 32.
+    let line_spacing = View.pixels_per_row
     let big_text = 12.
     let small_text = 8.
 
@@ -86,6 +86,9 @@ module Make (C : CANVAS) = struct
     C.line_to cr ~x:(x -. w) ~y:(y +. h);
     C.stroke cr
 
+  let y_of_row v row =
+    float row *. Style.line_spacing -. v.View.scroll_y
+
   let rec render_events v cr (item : Model.item) =
     for i = 0 to Array.length item.events - 1 do
       let (ts, e) = item.events.(i) in
@@ -99,13 +102,13 @@ module Make (C : CANVAS) = struct
         render_fiber v cr ts f;
         Style.running_fiber cr;
         let x = View.x_of_time v ts in
-        C.move_to cr ~x ~y:(float item.y *. Style.line_spacing +. Style.fiber_padding_top);
-        C.line_to cr ~x ~y:(float f.y *. Style.line_spacing +. Style.fiber_padding_top +. Style.fiber_height);
+        C.move_to cr ~x ~y:(y_of_row v item.y +. Style.fiber_padding_top);
+        C.line_to cr ~x ~y:(y_of_row v f.y +. Style.fiber_padding_top +. Style.fiber_height);
         C.stroke cr
       | Create_cc (ty, cc) -> render_cc v cr ts cc ty
       | Log msg ->
         let x = View.x_of_time v ts in
-        let y = float item.y *. Style.line_spacing +. 10. in
+        let y = y_of_row v item.y +. 10. in
         C.move_to cr ~x ~y:(y +. 3.);
         C.line_to cr ~x ~y:(y -. 3.);
         C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
@@ -120,7 +123,7 @@ module Make (C : CANVAS) = struct
     done
 
   and render_fiber v cr start_time (f : Model.item) =
-    let y = float f.y *. Style.line_spacing in
+    let y = y_of_row v f.y in
 (*
     let x = View.x_of_time v start_time in
     let w =
@@ -166,7 +169,7 @@ module Make (C : CANVAS) = struct
     render_events v cr cc;
     let label = Option.value cc.name ~default:ty in
     let x = View.x_of_time v start_time in
-    let y = float cc.y *. Style.line_spacing in
+    let y = y_of_row v cc.y in
     let w =
       match cc.end_time with
       | None -> v.width -. x

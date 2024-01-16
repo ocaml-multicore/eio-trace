@@ -57,7 +57,9 @@ and item = {
 
 type t = {
   start_time : int64;
+  duration : float;
   root : item;
+  height : int;
 }
 
 let map_event f : Trace.event -> event = function
@@ -77,9 +79,51 @@ let as_string = function
   | `String s -> s
   | _ -> failwith "Not a string"
 
+let layout root =
+  let max_y = ref 1 in
+  let rec visit ~y (i : item) =
+    Fmt.epr "%d is at %d@." i.id y;
+    i.y <- y;
+    i.height <- 1;
+    i.end_cc_label <- None;
+    i.events |> Array.iter (fun (ts, e) ->
+        match e with
+        | Log _ ->
+          if i.end_cc_label = None then (
+              i.end_cc_label <- Some ts;
+            )
+        | Add_fiber _ -> ()
+        | Create_cc (_, child) ->
+          Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
+          if i.end_cc_label = None then (
+              i.end_cc_label <- Some ts;
+            );
+          visit ~y child;
+          i.height <- max i.height child.height
+      );
+    if i.end_cc_label = None then i.end_cc_label <- i.end_time;
+    i.events |> Array.iter (fun (_, e) ->
+        match e with
+        | Log _ | Create_cc _ -> ()
+        | Add_fiber f ->
+          Fmt.epr "%d creates fiber %d@." i.id f.id;
+          visit ~y:(y + i.height) f;
+          i.height <- i.height + f.height;
+      );
+    max_y := max !max_y i.y;
+    Fmt.epr "%d is at %d+%d@." i.id y i.height;
+  in
+  visit root ~y:0;
+  !max_y
+
 let of_trace (trace : Trace.t) =
   let start_time, root = Option.get trace.root in
-  let time ts = Int64.sub ts start_time |> Int64.to_float in
+  let duration = ref 0.0 in
+  let time ts =
+    let f = Int64.sub ts start_time |> Int64.to_float in
+    duration := max !duration f;
+    f
+  in
   let rec import (item : Trace.item) =
     let events = import_events item.events in
     let activations = import_activations item.activations in
@@ -111,40 +155,8 @@ let of_trace (trace : Trace.t) =
   and import_events events =
     events |> List.rev |> List.map (fun (ts, x) -> (time ts, map_event import x)) |> Array.of_list
   in
-  { start_time; root = import root }
-
-let layout t =
-  let rec visit ~y (i : item) =
-    Fmt.epr "%d is at %d@." i.id y;
-    i.y <- y;
-    i.height <- 1;
-    i.end_cc_label <- None;
-    i.events |> Array.iter (fun (ts, e) ->
-        match e with
-        | Log _ ->
-          if i.end_cc_label = None then (
-              i.end_cc_label <- Some ts;
-            )
-        | Add_fiber _ -> ()
-        | Create_cc (_, child) ->
-          Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
-          if i.end_cc_label = None then (
-              i.end_cc_label <- Some ts;
-            );
-          visit ~y child;
-          i.height <- max i.height child.height
-      );
-    if i.end_cc_label = None then i.end_cc_label <- i.end_time;
-    i.events |> Array.iter (fun (_, e) ->
-        match e with
-        | Log _ | Create_cc _ -> ()
-        | Add_fiber f ->
-          Fmt.epr "%d creates fiber %d@." i.id f.id;
-          visit ~y:(y + i.height) f;
-          i.height <- i.height + f.height;
-      );
-    Fmt.epr "%d is at %d+%d@." i.id y i.height;
-  in
-  visit t.root ~y:0
+  let root = import root in
+  let height = layout root in
+  { start_time; duration = !duration; root; height }
 
 let start_time t = t.start_time

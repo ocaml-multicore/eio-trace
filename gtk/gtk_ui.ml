@@ -35,10 +35,32 @@ let (_ : string) = GMain.init ()
 let create model =
   let window = GWindow.window () in
   window#event#connect#delete ==> (fun _ -> GMain.quit (); true);
-  let table = GPack.table ~rows:1 ~columns:1 ~homogeneous:false ~packing:window#add () in
+  let table = GPack.table ~rows:2 ~columns:2 ~homogeneous:false ~packing:window#add () in
+  let hadjustment = GData.adjustment () in
+  let vadjustment = GData.adjustment () in
   let area = GMisc.drawing_area ~packing:(table#attach ~left:0 ~top:0 ~expand:`BOTH ~fill:`BOTH) () in
+  let _hscroll = GRange.scrollbar `HORIZONTAL ~adjustment:hadjustment ~packing:(table#attach ~left:0 ~top:1 ~expand:`X ~fill:`BOTH) () in
+  let _vscroll = GRange.scrollbar `VERTICAL ~adjustment:vadjustment ~packing:(table#attach ~left:1 ~top:0 ~expand:`Y ~fill:`BOTH) () in
   let v = View.of_model model ~width:1000. ~height:1000. in
-  let set_scollbars () = () in
+  let set_scollbars () =
+    let (xlo, xhi, xsize, xvalue), (ylo, yhi, ysize, yvalue) = View.scroll_bounds v in
+    hadjustment#set_bounds ~lower:xlo ~upper:xhi ~page_size:xsize ();
+    vadjustment#set_bounds ~lower:ylo ~upper:yhi ~page_size:ysize ();
+    hadjustment#set_value xvalue;
+    vadjustment#set_value yvalue;
+  in
+  let set_start_time t =
+    View.set_start_time v t
+    |> hadjustment#set_value
+  in
+  let set_scroll_y t =
+    View.set_scroll_y v t
+    |> vadjustment#set_value
+  in
+  area#misc#connect#size_allocate ==> (fun alloc ->
+      View.set_size v (float_of_int alloc.Gtk.width) (float_of_int alloc.Gtk.height);
+      set_scollbars ()
+    );
   let redraw () = GtkBase.Widget.queue_draw area#as_widget in
   area#misc#connect#draw ==> (fun cr ->
       let alloc = area#misc#allocation in
@@ -57,17 +79,12 @@ let create model =
       let t_at_pointer = View.time_of_x v x in
       let redraw_zoomed () =
         let t_new_at_pointer = View.time_of_x v x in
-        View.set_start_time v (v.start_time -. (t_new_at_pointer -. t_at_pointer));
+        set_start_time (v.start_time -. (t_new_at_pointer -. t_at_pointer));
         redraw ()
       in
       let zoom diff =
-        if diff > 0.0 then (
-          View.zoom v diff;
-          set_scollbars ()
-        ) else (
-          set_scollbars ();
-          View.zoom v diff
-        );
+        View.zoom v diff;
+        set_scollbars ();
         redraw_zoomed ();
         true
       in
@@ -83,7 +100,7 @@ let create model =
       match GdkEvent.get_type ev, GdkEvent.Button.button ev with
       | `BUTTON_PRESS, 1 ->
         let start_t = View.time_of_x v (GdkEvent.Button.x ev) in
-        drag_start := Some start_t;
+        drag_start := Some (start_t, v.scroll_y +. GdkEvent.Button.y ev);
         true;
       | _ -> false
     );
@@ -91,14 +108,31 @@ let create model =
   area#event#connect#motion_notify ==> (fun ev ->
       match !drag_start with
       | None -> false
-      | Some start_time ->
+      | Some (start_time, start_y) ->
         let x = GdkEvent.Motion.x ev in
-        let time_at_pointer = View.time_of_x v x in
-        if time_at_pointer <> start_time then (
-          View.set_start_time v (start_time -. View.timespan_of_width v x);
-          redraw ()
-        );
+        let y = GdkEvent.Motion.y ev in
+        let old_pos = v.start_time, v.scroll_y in
+        set_start_time (start_time -. View.timespan_of_width v x);
+        set_scroll_y (start_y -. y);
+        let new_pos = v.start_time, v.scroll_y in
+        if old_pos <> new_pos then redraw ();
         true
     );
+
+  hadjustment#connect#value_changed ==> (fun () ->
+      set_start_time (View.timespan_of_width v hadjustment#value);
+      redraw ();
+    );
+
+  vadjustment#connect#value_changed ==> (fun () ->
+      set_scroll_y vadjustment#value;
+      redraw ();
+    );
+
+  (* GTK fails to display the scrollbars correctly for some reason
+     (possibly because Sway sends two size allocations in quick succession?),
+     so force a recalculation after a short delay. *)
+  let fix_scrollbars () = set_scollbars (); false in
+  ignore (GMain.Timeout.add ~ms:200 ~callback:fix_scrollbars : Glib.Timeout.id);
 
   window#show ()
