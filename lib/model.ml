@@ -84,7 +84,7 @@ let of_trace (trace : Trace.t) =
     let events = import_events item.events in
     let activations = import_activations item.activations in
     let end_time = Option.map time item.end_time in
-    let x = { id = item.id; name = item.name; end_time; events; activations; y = 0; height = 0; end_cc_label = end_time } in
+    let x = { id = item.id; name = item.name; end_time; events; activations; y = 0; height = 0; end_cc_label = None } in
     x
   and import_activations xs =
     let s = Spans.create () in
@@ -118,9 +118,14 @@ let layout t =
     Fmt.epr "%d is at %d@." i.id y;
     i.y <- y;
     i.height <- 1;
+    i.end_cc_label <- None;
     i.events |> Array.iter (fun (ts, e) ->
         match e with
-        | Log _ | Add_fiber _ -> ()
+        | Log _ ->
+          if i.end_cc_label = None then (
+              i.end_cc_label <- Some ts;
+            )
+        | Add_fiber _ -> ()
         | Create_cc (_, child) ->
           Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
           if i.end_cc_label = None then (
@@ -129,6 +134,7 @@ let layout t =
           visit ~y child;
           i.height <- max i.height child.height
       );
+    if i.end_cc_label = None then i.end_cc_label <- i.end_time;
     i.events |> Array.iter (fun (_, e) ->
         match e with
         | Log _ | Create_cc _ -> ()
