@@ -36,7 +36,7 @@ let grid t x =
   grid_step *. 1e-9, grid_start_x, grid_step_x
 
 let zoom t delta =
-  t.zoom <- t.zoom +. delta;
+  t.zoom <- clamp (t.zoom +. delta) ~min:(-.15.) ~max:2.5;
   t.pixels_per_ns <- 10. ** t.zoom
 
 let max_x_scroll t =

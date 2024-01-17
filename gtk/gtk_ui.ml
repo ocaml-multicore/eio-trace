@@ -73,7 +73,7 @@ let create model =
       true
     );
   area#misc#set_app_paintable true;
-  area#event#add [`SCROLL; `SMOOTH_SCROLL; `BUTTON1_MOTION; `BUTTON_PRESS];
+  area#event#add [`SMOOTH_SCROLL; `BUTTON1_MOTION; `BUTTON_PRESS];
   area#event#connect#scroll ==> (fun ev ->
       let x = GdkEvent.Scroll.x ev in
       let t_at_pointer = View.time_of_x v x in
@@ -89,8 +89,6 @@ let create model =
         true
       in
       match GdkEvent.Scroll.direction ev with
-      | `UP -> zoom 0.2
-      | `DOWN -> zoom (-0.2)
       | `SMOOTH -> zoom ((-. GdkEvent.Scroll.delta_y ev) /. 8.0)
       | _ -> false
     );
