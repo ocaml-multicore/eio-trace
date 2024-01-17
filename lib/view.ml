@@ -13,7 +13,13 @@ let v_margin = 4.
 
 let pixels_per_row = 32.
 
-let x_of_time t time = (time -. t.start_time) *. t.pixels_per_ns
+let clamp ~min:a ~max:b (v : float) =
+  max a (min b v)
+
+let x_of_time t time =
+  let x = (time -. t.start_time) *. t.pixels_per_ns in
+  clamp x ~min:(-. 100.) ~max:(t.width +. 100.)
+
 let time_of_x t x = x /. t.pixels_per_ns +. t.start_time
 
 let width_of_timespan t ts = ts *. t.pixels_per_ns
@@ -32,9 +38,6 @@ let grid t x =
 let zoom t delta =
   t.zoom <- t.zoom +. delta;
   t.pixels_per_ns <- 10. ** t.zoom
-
-let clamp ~min:a ~max:b (v : float) =
-  max a (min b v)
 
 let max_x_scroll t =
   width_of_timespan t t.model.duration +. h_margin
