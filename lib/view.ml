@@ -30,8 +30,8 @@ let grid t x =
     let l = 2.5 -. log10 t.pixels_per_ns |> floor in
     10. ** l
   in
-  let grid_step_x = grid_step *. t.pixels_per_ns in
-  let starting_grid_line = floor (x /. t.pixels_per_ns /. grid_step) in
+  let starting_grid_line = floor (time_of_x t x /. grid_step) in
+  let grid_step_x = grid_step *. t.pixels_per_ns in (* pixels per grid step *)
   let grid_start_x = (starting_grid_line *. grid_step_x) -. t.start_time *. t.pixels_per_ns in
   grid_step *. 1e-9, grid_start_x, grid_step_x
 
