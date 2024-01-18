@@ -1,4 +1,4 @@
 (executable
  (public_name eio-trace-gtk)
  (name main)
- (libraries eio_trace lablgtk3 cmdliner))
+ (libraries eio_trace lablgtk3))
