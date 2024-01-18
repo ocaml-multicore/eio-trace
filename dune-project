@@ -3,11 +3,13 @@
 (formatting disabled)
 (generate_opam_files true)
 (source (github talex5/eio-trace))
+(maintainers "Thomas Leonard")
 (authors "Thomas Leonard")
 (package
  (name eio-trace)
  (synopsis "Trace visualisation for Eio programs")
  (depends
   (ocaml (>= 5.1.0))
-  (eio (>= 0.13))
+  (eio_main (>= 0.13))
+  (cmdliner (>= 1.2.0))
   (lablgtk3 (>= 3.1.3))))
