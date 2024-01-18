@@ -133,10 +133,10 @@ let callbacks t =
        | _ -> ()
     )
 
-let trace ~finished ~delay t cursor =
+let trace ~child_finished ~delay t cursor =
   let callbacks = callbacks t in
   let rec aux () =
-    let stop = !finished in
+    let stop = !child_finished in
     let _ : int = Runtime_events.read_poll cursor callbacks None in
     if not stop then (
       Eio_unix.sleep delay;
@@ -166,15 +166,23 @@ let rec get_cursor tmp_dir child =
 
 let ( / ) = Eio.Path.( / )
 
-let main ~proc_mgr ~fs tracefile args =
+let run ?ui ?tracefile ~proc_mgr ~fs args =
+  let fs = (fs :> Eio.Fs.dir_ty Eio.Path.t) in
+  let tracefile = (tracefile :> Eio.Fs.dir_ty Eio.Path.t option) in
   let delay = 0.01 in
   Switch.run @@ fun sw ->
+  let tmp_dir = Filename.temp_dir "eio-trace-" ".tmp" in
+  let eio_tmp_dir = fs / tmp_dir in
+  Switch.on_release sw (fun () -> Eio.Path.rmtree eio_tmp_dir);
+  let tracefile =
+    match tracefile with
+    | Some x -> x
+    | None -> eio_tmp_dir / "trace.fxt"
+  in
   let out = Eio.Path.open_out ~sw tracefile ~create:(`Or_truncate 0o644) in
   Eio.Buf_write.with_flow out @@ fun w ->
   let fxt = Write.of_writer w in
   traceln "Recording to %a" Eio.Path.pp tracefile;
-  let tmp_dir = Filename.temp_dir "eio-trace-" ".tmp" in
-  Switch.on_release sw (fun () -> Eio.Path.rmtree (fs / tmp_dir));
   let child = spawn_child ~sw ~proc_mgr ~tmp_dir args in
   let t = {
     fxt;
@@ -182,13 +190,25 @@ let main ~proc_mgr ~fs tracefile args =
     rings = Domains.empty;
     fibers = Fibers.empty;
   } in
-  let finished = ref false in
-  Fiber.both
+  let finished, set_finished = Promise.create () in
+  let child_finished = ref false in
+  Switch.run @@ fun sw ->       (* Fibers need to prevent [w] from closing, so need new switch *)
+  Fiber.fork ~sw
     (fun () ->
        let cursor = get_cursor tmp_dir child in
-       trace t ~finished ~delay cursor)
+       trace t ~child_finished ~delay cursor;
+       Promise.resolve set_finished ()
+    );
+  Fiber.fork ~sw
     (fun () ->
        Fun.protect (fun () -> Eio.Process.await_exn child)
-         ~finally:(fun () -> finished := true);
+         ~finally:(fun () -> child_finished := true);
     );
-  Ok ()
+  match ui with
+  | None -> Ok ()
+  | Some ui ->
+    (* Wait up to a second for the child to do something before showing the trace *)
+    Fiber.first
+      (fun () -> Promise.await finished)
+      (fun () -> Eio_unix.sleep 1.);
+    ui (Eio.Path.native_exn tracefile)
