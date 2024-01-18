@@ -114,7 +114,7 @@ let layout root =
     Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
   visit root ~y:0;
-  !max_y
+  !max_y + 1
 
 let of_trace (trace : Trace.t) =
   let start_time, root = Option.get trace.root in

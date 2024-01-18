@@ -1,32 +1,5 @@
 open Eio_trace
 
-module Canvas = struct
-  include Cairo
-
-  let move_to cr ~x ~y = move_to cr x y
-  let line_to cr ~x ~y = line_to cr x y
-  let rectangle cr ~x ~y ~w ~h = rectangle cr x y ~w ~h
-
-  let paint_text cr ?clip_area ~x ~y msg =
-    match clip_area with
-    | None ->
-      move_to cr ~x ~y;
-      show_text cr msg
-    | Some (w, h) ->
-      save cr;
-      rectangle cr ~x ~y:0.0 ~w ~h;
-      clip cr;
-      move_to cr ~x ~y;
-      show_text cr msg;
-      restore cr
-
-  let set_source_rgb cr ~r ~g ~b = set_source_rgb cr r g b
-  let set_source_alpha cr ~r ~g ~b a = set_source_rgba cr r g b a
-  let set_source_rgba cr ~r ~g ~b ~a = set_source_rgba cr r g b a
-end
-
-module R = Render.Make(Canvas)
-
 let ( ==> ) signal callback =
   ignore (signal ~callback : GtkSignal.id)
 
@@ -69,7 +42,7 @@ let create model =
       Cairo.set_font_size cr 16.;
       Cairo.select_font_face cr "Sans";
       Cairo.set_line_join cr Cairo.JOIN_BEVEL;
-      R.render v cr;
+      Render_cairo.render v cr;
       true
     );
   area#misc#set_app_paintable true;
@@ -129,8 +102,13 @@ let create model =
 
   (* GTK fails to display the scrollbars correctly for some reason
      (possibly because Sway sends two size allocations in quick succession?),
-     so force a recalculation after a short delay. *)
-  let fix_scrollbars () = set_scollbars (); false in
+     so force a recalculation after a short delay.
+     Also, delay zooming to fit to give Sway time to sort itself out. *)
+  let fix_scrollbars () =
+    View.zoom_to_fit v;
+    set_scollbars ();
+    false
+  in
   ignore (GMain.Timeout.add ~ms:200 ~callback:fix_scrollbars : Glib.Timeout.id);
 
   window#show ()

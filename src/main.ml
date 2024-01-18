@@ -7,16 +7,20 @@ let tracefile =
   let doc = "The path of the trace file." in
   Arg.(value @@ opt string "trace.fxt" @@ info ["f"; "tracefile"] ~docv:"PATH" ~doc)
 
+let imagefile =
+  let doc = "The path of the output image." in
+  Arg.(required @@ pos 0 (some string) None @@ info [] ~docv:"OUTPUT" ~doc)
+
 let child_args =
   let doc = "The command to be executed and monitored." in
   Arg.(non_empty @@ pos_all string [] @@ info [] ~docv:"command" ~doc)
     
 let eio_trace_gtk = "eio-trace-gtk"
 
-let exec_gtk path =
+let exec_gtk args =
   let self = Sys.argv.(0) in
   let gtk_exe =
-    if Filename.is_implicit path then eio_trace_gtk
+    if Filename.is_implicit self then eio_trace_gtk
     else (
       (* Try to find the GTK binary in our own directory first.
          Useful for testing without installing. *)
@@ -27,9 +31,17 @@ let exec_gtk path =
     )
   in
   try
-    Unix.execvp gtk_exe [| gtk_exe; path |]
+    Unix.execvp gtk_exe (Array.of_list (gtk_exe :: args))
   with Unix.Unix_error(ENOENT, _, _) ->
     Fmt.error "%S not found; can't run UI" gtk_exe
+
+let show tracefile = exec_gtk ["show"; tracefile]
+
+let render tracefile output =
+  if Filename.check_suffix output ".svg" then
+    exec_gtk ["render-svg"; tracefile; output]
+  else
+    Fmt.error "Unknown file extension in %S (should end in e.g. '.svg')" output
 
 let cmd env =
   let fs = Eio.Stdenv.fs env in
@@ -39,7 +51,8 @@ let cmd env =
   @@ List.map (fun (name, term) -> Cmd.v (Cmd.info name) term) [
     "record", Record.main ~fs ~proc_mgr      $$ path tracefile $ child_args;
     "dump",   Dump.main Format.std_formatter $$ path tracefile;
-    "show",   exec_gtk                       $$ tracefile;
+    "show",   show                           $$ tracefile;
+    "render", render                         $$ tracefile $ imagefile;
   ]
 
 let () =
