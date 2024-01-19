@@ -24,6 +24,10 @@ You might like to start by tracing the example that comes with eio-trace:
 dune exec -- eio-trace run -- ./_build/default/examples/net/main.exe
 ```
 
+<p align='center'>
+  <img src="./doc/net.svg"/>
+</p>
+
 To record a trace:
 
 ```
@@ -39,6 +43,12 @@ as it takes advantage of Eio's structured concurrency:
 
 ```
 dune exec -- eio-trace show trace.fxt
+```
+
+To convert a trace to SVG format:
+
+```
+dune exec -- eio-trace render -f trace.fxt trace.svg
 ```
 
 [Eio]: https://github.com/ocaml-multicore/eio
