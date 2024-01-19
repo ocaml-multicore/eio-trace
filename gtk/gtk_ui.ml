@@ -99,6 +99,15 @@ let create model =
       set_scroll_y vadjustment#value;
       redraw ();
     );
+  
+  let height =
+    int_of_float @@ min
+      (float (Gdk.Screen.height ()) *. 0.8)
+      ((float v.model.height +. 1.) *. View.pixels_per_row +. 2. *. View.v_margin)
+  in
+  window#set_default_size
+    ~width:(int_of_float (float (Gdk.Screen.width ()) *. 0.8))
+    ~height;
 
   (* GTK fails to display the scrollbars correctly for some reason
      (possibly because Sway sends two size allocations in quick succession?),
