@@ -3,10 +3,9 @@ open Eio_trace
 let ( ==> ) signal callback =
   ignore (signal ~callback : GtkSignal.id)
 
-let (_ : string) = GMain.init ()
-
-let create model =
+let create ~title model =
   let window = GWindow.window () in
+  window#set_title title;
   window#event#connect#delete ==> (fun _ -> GMain.quit (); true);
   let table = GPack.table ~rows:2 ~columns:2 ~homogeneous:false ~packing:window#add () in
   let hadjustment = GData.adjustment () in

@@ -7,6 +7,10 @@ let tracefile =
   let doc = "The path of the trace file." in
   Arg.(value @@ opt string "trace.fxt" @@ info ["f"; "tracefile"] ~docv:"PATH" ~doc)
 
+let tracefiles =
+  let doc = "The path of the trace file(s)." in
+  Arg.(value @@ pos_all string ["trace.fxt"] @@ info [] ~docv:"PATH" ~doc)
+
 let imagefile =
   let doc = "The path of the output image." in
   Arg.(required @@ pos 0 (some string) None @@ info [] ~docv:"OUTPUT" ~doc)
@@ -36,12 +40,12 @@ let exec_gtk args =
   with Unix.Unix_error(ENOENT, _, _) ->
     Fmt.error "%S not found; can't run UI" gtk_exe
 
-let show tracefile = exec_gtk ["show"; tracefile]
+let show tracefiles = exec_gtk ("show" :: tracefiles)
 
 let run ~fs ~proc_mgr args =
   let gtk_exe = find_eio_trace_gtk () in
   let ui tracefile =
-    Eio.Process.run proc_mgr [gtk_exe; "show"; tracefile];
+    Eio.Process.run proc_mgr (gtk_exe :: "run" :: tracefile :: args);
     Ok ()
   in
   Record.run ~fs ~proc_mgr ~ui args
@@ -64,7 +68,7 @@ let cmd env =
     "record", record ~fs ~proc_mgr           $$ path tracefile $ child_args;
     "dump",   Dump.main Format.std_formatter $$ path tracefile;
     "run",    run ~fs ~proc_mgr              $$ child_args;
-    "show",   show                           $$ tracefile;
+    "show",   show                           $$ tracefiles;
     "render", render                         $$ tracefile $ imagefile;
   ]
 

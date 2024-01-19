@@ -1,5 +1,7 @@
 open Eio_trace
 
+let (_ : string) = GMain.init ()
+
 let load tracefile =
   let ch = open_in_bin tracefile in
   let len = in_channel_length ch in
@@ -8,9 +10,17 @@ let load tracefile =
   let trace = Trace.create data in
   Model.of_trace trace
 
-let show tracefile =
-  Gtk_ui.create (load tracefile);
-  GMain.main ()
+let show ?args tracefile =
+  let title =
+    match args with
+    | None ->
+      Printf.sprintf "%s (%s) - eio-trace"
+        (Filename.basename tracefile)
+        (Filename.dirname tracefile)
+    | Some args ->
+      String.concat " " args
+  in
+  Gtk_ui.create ~title (load tracefile)
 
 let render ~output tracefile =
   let m = load (tracefile) in
@@ -32,7 +42,8 @@ let render ~output tracefile =
   Cairo.Surface.finish surface
 
 let () =
-  match Sys.argv with
-  | [| _; "show"; tracefile |] -> show tracefile
-  | [| _; "render-svg"; tracefile; output |] -> render tracefile ~output
+  match Array.to_list Sys.argv with
+  | _ :: "show" :: tracefiles -> List.iter show tracefiles; GMain.main ()
+  | _ :: "run" :: tracefile :: args -> show ~args tracefile; GMain.main ()
+  | [ _; "render-svg"; tracefile; output ] -> render tracefile ~output
   | _ -> failwith "Invalid arguments (eio-trace-gtk should be run via eio-trace)"
