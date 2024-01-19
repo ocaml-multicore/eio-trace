@@ -89,6 +89,11 @@ module Make (C : CANVAS) = struct
   let y_of_row v row =
     float row *. Style.line_spacing -. v.View.scroll_y
 
+  let iter_spans v fn item =
+    Array.iter fn item.Model.activations;
+    let stop = Option.value item.end_time ~default:v.View.model.duration in
+    fn (stop, [])
+
   let rec render_events v cr (item : Model.item) =
     for i = 0 to Array.length item.events - 1 do
       let (ts, e) = item.events.(i) in
@@ -137,7 +142,7 @@ module Make (C : CANVAS) = struct
         C.set_font_size cr Style.big_text;
         let prev_stack = ref [] in
         let event = ref (start_time, []) in
-        f.activations |> Array.iter (fun event' ->
+        f |> iter_spans v (fun event' ->
             let t0, stack = !event in
             event := event';
             let t1 = fst event' in
