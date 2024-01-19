@@ -3,5 +3,4 @@ all:
 
 example:
 	dune build ./examples/net/main.exe @install
-	dune exec -- eio-trace record -- ./_build/default/examples/net/main.exe
-	dune exec -- eio-trace show
+	dune exec -- eio-trace run -- ./_build/default/examples/net/main.exe
