@@ -79,13 +79,14 @@ let as_string = function
   | `String s -> s
   | _ -> failwith "Not a string"
 
-let layout root =
+let layout ~duration root =
   let max_y = ref 1 in
   let rec visit ~y (i : item) =
     Fmt.epr "%d is at %d@." i.id y;
     i.y <- y;
     i.height <- 1;
     i.end_cc_label <- None;
+    let intervals = ref [] in
     i.events |> Array.iter (fun (ts, e) ->
         match e with
         | Log _ ->
@@ -99,17 +100,34 @@ let layout root =
               i.end_cc_label <- Some ts;
             );
           visit ~y child;
-          i.height <- max i.height child.height
+          i.height <- max i.height child.height;
+          let stop = Option.value child.end_time ~default:duration in
+          intervals := { Itv.value = child; start = ts; stop } :: !intervals;
       );
     if i.end_cc_label = None then i.end_cc_label <- i.end_time;
-    i.events |> Array.iter (fun (_, e) ->
+    let start_fibers = List.length !intervals in
+    i.events |> Array.iter (fun (ts, e) ->
         match e with
         | Log _ | Create_cc _ -> ()
         | Add_fiber f ->
           Fmt.epr "%d creates fiber %d@." i.id f.id;
-          visit ~y:(y + i.height) f;
-          i.height <- i.height + f.height;
+          let stop = Option.value f.end_time ~default:duration in
+          intervals := { Itv.value = f; start = ts; stop } :: !intervals;
       );
+    let intervals = List.rev !intervals in
+    let itv = Itv.create intervals in
+    let height = ref i.height in
+    intervals |> List.to_seq |> Seq.drop start_fibers |> Seq.iter (fun (interval : _ Itv.interval) ->
+        let y = ref (i.y + 1) in
+        let adjust other =
+          y := max !y (other.y + other.height);
+        in
+        Itv.iter_overlaps adjust interval.start interval.stop itv;
+        let f = interval.Itv.value in
+        visit ~y:!y f;
+        height := max !height (f.y - i.y + f.height);
+      );
+    i.height <- !height;
     max_y := max !max_y i.y;
     Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
@@ -156,7 +174,8 @@ let of_trace (trace : Trace.t) =
     events |> List.rev |> List.map (fun (ts, x) -> (time ts, map_event import x)) |> Array.of_list
   in
   let root = import root in
-  let height = layout root in
-  { start_time; duration = !duration; root; height }
+  let duration = !duration in
+  let height = layout root ~duration in
+  { start_time; duration; root; height }
 
 let start_time t = t.start_time
