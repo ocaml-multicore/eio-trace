@@ -57,12 +57,21 @@ and item = {
   mutable activations : (timestamp * [ `Span of string | `Suspend of string ] list) array;
 }
 
+module Ring = struct
+  type id = Trace.Ring.id
+
+  type t = {
+    events : (timestamp * string list) array;
+  }
+end
+
 type t = {
   items : item Ids.t;
   start_time : int64;
   duration : float;
-  root : item;
+  root : Ring.id * item;
   height : int;
+  rings : Ring.t Trace.Rings.t;
 }
 
 let get t id = Ids.find_opt id t.items
@@ -136,11 +145,26 @@ let layout ~duration root =
     max_y := max !max_y i.y;
     Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
-  visit root ~y:0;
+  let visit_domain ~y i =
+    i.y <- y;
+    i.height <- 0;
+    i.end_cc_label <- None;
+    i.events |> Array.iter (fun (_ts, e) ->
+        match e with
+        | Log _ | Create_cc _ -> ()
+        | Add_fiber { parent = _; child } ->
+          visit ~y:(y + i.height) child;
+          i.height <- child.y - y + child.height;
+          if i.end_cc_label = None then (
+              i.end_cc_label <- child.end_cc_label;
+            );
+      );
+  in
+  visit_domain root ~y:0;
   !max_y + 1
 
 let of_trace (trace : Trace.t) =
-  let start_time, root = Option.get trace.root in
+  let start_time, ring_id, root = Option.get trace.root in
   let duration = ref 0.0 in
   let time ts =
     let f = Int64.sub ts start_time |> Int64.to_float in
@@ -180,10 +204,17 @@ let of_trace (trace : Trace.t) =
   and import_events events =
     events |> List.rev |> List.map (fun (ts, x) -> (time ts, map_event import x)) |> Array.of_list
   in
+  let import_ring r =
+    let events = List.map (fun (ts, s) -> time ts, s) r.Trace.Ring.events |> List.rev |> Array.of_list in
+    { Ring.events }
+  in
   let root = import root in
   let items = !items in
   let duration = !duration in
   let height = layout root ~duration in
-  { start_time; duration; root; height; items }
+  let rings = Trace.Rings.map import_ring trace.rings in
+  { start_time; duration; root = (ring_id, root); height; items; rings }
 
 let start_time t = t.start_time
+
+let ring t id = Trace.Rings.find id t.rings

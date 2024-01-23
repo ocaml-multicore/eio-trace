@@ -110,6 +110,7 @@ let callbacks t =
                ~thread ~name:"cc" ~category:"eio" ~ts ~args:[
                "id", `Pointer (Int64.of_int id);
                "type", `String (Eio_runtime_events.cc_ty_to_string ty);
+               "cpu", `Int64 (Int64.of_int ring_id);
              ]
            | `Obj _ty -> ()
          end

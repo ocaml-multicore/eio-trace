@@ -1,6 +1,6 @@
 module Read = Fxt.Read
 
-module Domains = Map.Make(Int)
+module Rings = Map.Make(Int)
 module Ids = Map.Make(Int)
 
 let i64 = Int64.to_int
@@ -29,7 +29,9 @@ and item = {
   mutable activations : (timestamp * activation) list;
 }
 
-module Domain = struct
+module Ring = struct
+  type id = int
+
   type t = {
     mutable current_fiber : int option;
     mutable events : (timestamp * string list) list;
@@ -37,17 +39,17 @@ module Domain = struct
 end
 
 type t = {
-  mutable root : (timestamp * item) option;
-  mutable domains : Domain.t Domains.t;
+  mutable root : (timestamp * Ring.id * item) option;
+  mutable rings : Ring.t Rings.t;
   mutable items : item Ids.t;
 }
 
 let get_domain t ring =
-  match Domains.find_opt ring t.domains with
+  match Rings.find_opt ring t.rings with
   | Some x -> x
   | None ->
-    let x = { Domain.current_fiber = None; events = [] } in
-    t.domains <- Domains.add ring x t.domains;
+    let x = { Ring.current_fiber = None; events = [] } in
+    t.rings <- Rings.add ring x t.rings;
     x
 
 let current_fiber t ring =
@@ -96,6 +98,10 @@ let as_string = function
   | `String s -> s
   | _ -> failwith "Not a string"
 
+let as_int64 = function
+  | `Int64 x -> x
+  | _ -> failwith "Not an int64 type!"
+
 let process_event t e =
   let { Read.Event.ty; timestamp; thread; category; name; args } = e in
   match category, name, ty with
@@ -103,6 +109,10 @@ let process_event t e =
     let id = List.assoc_opt "id" args |> Option.get |> id_of_pointer in
     let ty = List.assoc_opt "type" args |> Option.get |> as_string in
     let cc = get t id in
+    if t.root = None then (
+      let ring_id = List.assoc_opt "cpu" args |> Option.get |> as_int64 |> Int64.to_int in
+      t.root <- Some (timestamp, ring_id, cc);
+    );
     fiber_of_thread t thread |> Option.iter (fun parent_fiber ->
         let parent_item = get t (parent_fiber.inner_cc) in
         parent_item.events <- (timestamp, Create_cc (ty, cc)) :: parent_item.events;
@@ -128,10 +138,15 @@ let process_event t e =
     let cc = List.assoc_opt "cc" args |> Option.get |> id_of_pointer in
     let child = get t id in
     Ids.find_opt cc t.items |> Option.iter (fun cc ->
-        fiber_of_thread t thread |> Option.iter @@ fun parent ->
+        let parent =
+          match fiber_of_thread t thread, t.root with
+          | Some f, _ -> Some f
+          | None, Some (_, _, root) -> Some root
+          | None, _ -> None
+        in
+        parent |> Option.iter @@ fun parent ->
         cc.events <- (timestamp, Add_fiber { parent = parent.id; child }) :: cc.events
       );
-    if t.root = None then t.root <- Some (timestamp, child)
   | "eio", "log", Instant ->
     let msg = List.assoc_opt "message" args |> Option.get |> as_string in
     fiber_of_thread t thread |> Option.iter @@ fun fiber ->
@@ -181,7 +196,7 @@ let process t reader =
 let create data =
   let t = {
     root = None;
-    domains = Domains.empty;
+    rings = Rings.empty;
     items = Ids.empty;
   } in
   Eio.Buf_read.parse_string_exn (process t) data;

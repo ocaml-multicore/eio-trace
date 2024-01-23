@@ -46,7 +46,7 @@ module Make (C : CANVAS) = struct
     let fiber_height = 14.0
 
     let running_fiber cr =
-        C.set_source_rgb cr ~r:0.4 ~g:0.8 ~b:0.4
+      C.set_source_rgb cr ~r:0.4 ~g:0.8 ~b:0.4
   end
 
   (** Draw [msg] in the area (min_x, max_x) and ideally centred at [x]. *)
@@ -201,6 +201,52 @@ module Make (C : CANVAS) = struct
     in
     C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) ~clip_area:(clip_width -. 2., v.height) label
 
+  let iter_gc_spans (t0, t1) fn ring =
+    let arr = ring.Model.Ring.events in
+    (* todo: binary search *)
+    for i = 0 to Array.length arr - 1 do
+      let time, e = arr.(i) in
+      if time >= t0 && time < t1 then fn (time, e)
+    done;
+    fn (t1, [])
+
+  let render_gc_events v cr ring (cc : Model.item) (t0, t1) =
+    let y = y_of_row v cc.y in
+    let h = float cc.height *. Style.line_spacing in
+    let t1 = Option.value t1 ~default:v.View.model.duration in
+    let prev_stack = ref [] in
+    let event = ref (t0, []) in
+    C.set_font_size cr Style.small_text;
+    ring |> iter_gc_spans (t0, t1) (fun event' ->
+        let t0, stack = !event in
+        event := event';
+        let t1 = fst event' in
+        let x0 = View.x_of_time v t0 in
+        let x1 = View.x_of_time v t1 in
+        let w = x1 -. x0 in
+        begin match stack with
+          | [] -> ()
+          | op :: p ->
+            let g = min 1.0 (0.1 *. float (List.length stack)) in
+            C.set_source_rgba cr ~r:g ~g:g ~b:(g /. 2.) ~a:0.9;
+            C.rectangle cr ~x:x0 ~y ~w ~h;
+            C.fill cr;
+            if p == !prev_stack then (
+              let clip_area = (w -. 0.2, v.height) in
+              if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
+              else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+              C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 8.) op
+                ~clip_area
+            )
+        end;
+        prev_stack := stack
+      )
+
+  let render_domain v cr start_time ring_id (cc : Model.item) =
+    let ring = Model.ring v.View.model ring_id in
+    render_gc_events v cr ring cc (start_time, cc.end_time);
+    render_events v cr cc
+
   let render_grid v cr =
     C.set_line_width cr 1.0;
     C.set_source_rgb cr ~r:0.7 ~g:0.7 ~b:0.7;
@@ -230,5 +276,6 @@ module Make (C : CANVAS) = struct
     C.paint cr;
     render_grid v cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    render_fiber v cr 0.0 v.model.root
+    let ring_id, cc = v.model.root in
+    render_domain v cr 0.0 ring_id cc
 end
