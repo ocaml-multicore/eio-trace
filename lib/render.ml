@@ -94,6 +94,12 @@ module Make (C : CANVAS) = struct
     let stop = Option.value item.end_time ~default:v.View.model.duration in
     fn (stop, [])
 
+  let link_fibers v cr ~x a b =
+    let upper, lower = if a.Model.y < b.Model.y then a, b else b, a in
+    C.move_to cr ~x ~y:(y_of_row v upper.y +. Style.fiber_padding_top);
+    C.line_to cr ~x ~y:(y_of_row v lower.y +. Style.fiber_padding_top +. Style.fiber_height);
+    C.stroke cr
+
   let rec render_events v cr (item : Model.item) =
     for i = 0 to Array.length item.events - 1 do
       let (ts, e) = item.events.(i) in
@@ -103,13 +109,12 @@ module Make (C : CANVAS) = struct
         else item.end_time
       in
       match (e : Model.event) with
-      | Add_fiber f ->
-        render_fiber v cr ts f;
+      | Add_fiber { parent; child } ->
+        let parent = Model.get v.View.model parent |> Option.value ~default:item in
+        render_fiber v cr ts child;
         Style.running_fiber cr;
         let x = View.x_of_time v ts in
-        C.move_to cr ~x ~y:(y_of_row v item.y +. Style.fiber_padding_top);
-        C.line_to cr ~x ~y:(y_of_row v f.y +. Style.fiber_padding_top +. Style.fiber_height);
-        C.stroke cr
+        link_fibers v cr ~x parent child
       | Create_cc (ty, cc) -> render_cc v cr ts cc ty
       | Log msg ->
         let x = View.x_of_time v ts in

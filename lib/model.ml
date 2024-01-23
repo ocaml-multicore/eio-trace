@@ -1,5 +1,7 @@
 type timestamp = float    (* ns since start_time *)
 
+module Ids = Map.Make(Int)
+
 module Spans : sig
   type 'a t
   (* The history of a stack of spans of type 'a *)
@@ -43,7 +45,7 @@ end
 type event =
   | Log of string
   | Create_cc of string * item
-  | Add_fiber of item
+  | Add_fiber of { parent : int; child : item }
 and item = {
   id : int;
   name : string option;
@@ -56,16 +58,19 @@ and item = {
 }
 
 type t = {
+  items : item Ids.t;
   start_time : int64;
   duration : float;
   root : item;
   height : int;
 }
 
+let get t id = Ids.find_opt id t.items
+
 let map_event f : Trace.event -> event = function
   | Log x -> Log x
   | Create_cc (ty, x) -> Create_cc (ty, f x)
-  | Add_fiber x -> Add_fiber (f x)
+  | Add_fiber { parent; child } -> Add_fiber { parent; child = f child }
 
 let dummy_event = 0., Log ""
 
@@ -79,13 +84,14 @@ let as_string = function
   | `String s -> s
   | _ -> failwith "Not a string"
 
-let layout root =
+let layout ~duration root =
   let max_y = ref 1 in
   let rec visit ~y (i : item) =
     Fmt.epr "%d is at %d@." i.id y;
     i.y <- y;
     i.height <- 1;
     i.end_cc_label <- None;
+    let intervals = ref [] in
     i.events |> Array.iter (fun (ts, e) ->
         match e with
         | Log _ ->
@@ -99,17 +105,34 @@ let layout root =
               i.end_cc_label <- Some ts;
             );
           visit ~y child;
-          i.height <- max i.height child.height
+          i.height <- max i.height child.height;
+          let stop = Option.value child.end_time ~default:duration in
+          intervals := { Itv.value = child; start = ts; stop } :: !intervals;
       );
     if i.end_cc_label = None then i.end_cc_label <- i.end_time;
-    i.events |> Array.iter (fun (_, e) ->
+    let start_fibers = List.length !intervals in
+    i.events |> Array.iter (fun (ts, e) ->
         match e with
         | Log _ | Create_cc _ -> ()
-        | Add_fiber f ->
-          Fmt.epr "%d creates fiber %d@." i.id f.id;
-          visit ~y:(y + i.height) f;
-          i.height <- i.height + f.height;
+        | Add_fiber { parent; child } ->
+          Fmt.epr "%d gets fiber %d, created by %d@." i.id child.id parent;
+          let stop = Option.value child.end_time ~default:duration in
+          intervals := { Itv.value = child; start = ts; stop } :: !intervals;
       );
+    let intervals = List.rev !intervals in
+    let itv = Itv.create intervals in
+    let height = ref i.height in
+    intervals |> List.to_seq |> Seq.drop start_fibers |> Seq.iter (fun (interval : _ Itv.interval) ->
+        let y = ref (i.y + 1) in
+        let adjust other =
+          y := max !y (other.y + other.height);
+        in
+        Itv.iter_overlaps adjust interval.start interval.stop itv;
+        let f = interval.Itv.value in
+        visit ~y:!y f;
+        height := max !height (f.y - i.y + f.height);
+      );
+    i.height <- !height;
     max_y := max !max_y i.y;
     Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
@@ -124,11 +147,13 @@ let of_trace (trace : Trace.t) =
     duration := max !duration f;
     f
   in
+  let items = ref Ids.empty in
   let rec import (item : Trace.item) =
     let events = import_events item.events in
     let activations = import_activations item.activations in
     let end_time = Option.map time item.end_time in
     let x = { id = item.id; name = item.name; end_time; events; activations; y = 0; height = 0; end_cc_label = None } in
+    items := Ids.add x.id x !items;
     x
   and import_activations xs =
     let s = Spans.create () in
@@ -156,7 +181,9 @@ let of_trace (trace : Trace.t) =
     events |> List.rev |> List.map (fun (ts, x) -> (time ts, map_event import x)) |> Array.of_list
   in
   let root = import root in
-  let height = layout root in
-  { start_time; duration = !duration; root; height }
+  let items = !items in
+  let duration = !duration in
+  let height = layout root ~duration in
+  { start_time; duration; root; height; items }
 
 let start_time t = t.start_time
