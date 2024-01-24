@@ -166,10 +166,10 @@ let rec get_cursor tmp_dir child =
 
 let ( / ) = Eio.Path.( / )
 
-let run ?ui ?tracefile ~proc_mgr ~fs args =
+let run ?ui ?tracefile ~proc_mgr ~fs ~freq args =
+  let delay = 1. /. freq in
   let fs = (fs :> Eio.Fs.dir_ty Eio.Path.t) in
   let tracefile = (tracefile :> Eio.Fs.dir_ty Eio.Path.t option) in
-  let delay = 0.01 in
   Switch.run @@ fun sw ->
   let tmp_dir = Filename.temp_dir "eio-trace-" ".tmp" in
   let eio_tmp_dir = fs / tmp_dir in

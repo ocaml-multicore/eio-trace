@@ -15,6 +15,10 @@ let imagefile =
   let doc = "The path of the output image." in
   Arg.(required @@ pos 0 (some string) None @@ info [] ~docv:"OUTPUT" ~doc)
 
+let freq =
+  let doc = "How many times per second to check for events." in
+  Arg.(value @@ opt float 100.0 @@ info ["F"; "freq"] ~docv:"RATE" ~doc)
+
 let child_args =
   let doc = "The command to be executed and monitored." in
   Arg.(non_empty @@ pos_all string [] @@ info [] ~docv:"command" ~doc)
@@ -42,16 +46,16 @@ let exec_gtk args =
 
 let show tracefiles = exec_gtk ("show" :: tracefiles)
 
-let run ~fs ~proc_mgr args =
+let run ~fs ~proc_mgr freq args =
   let gtk_exe = find_eio_trace_gtk () in
   let ui tracefile =
     Eio.Process.run proc_mgr (gtk_exe :: "run" :: tracefile :: args);
     Ok ()
   in
-  Record.run ~fs ~proc_mgr ~ui args
+  Record.run ~fs ~proc_mgr ~freq ~ui args
 
-let record ~fs ~proc_mgr tracefile args =
-  Record.run ~fs ~proc_mgr ~tracefile args
+let record ~fs ~proc_mgr freq tracefile args =
+  Record.run ~fs ~proc_mgr ~freq ~tracefile args
 
 let render tracefile output =
   if Filename.check_suffix output ".svg" then
@@ -65,9 +69,9 @@ let cmd env =
   let path x = Eio.Path.( / ) fs $$ x in
   Cmd.group (Cmd.info "eio-trace")
   @@ List.map (fun (name, term) -> Cmd.v (Cmd.info name) term) [
-    "record", record ~fs ~proc_mgr           $$ path tracefile $ child_args;
+    "record", record ~fs ~proc_mgr           $$ freq $ path tracefile $ child_args;
     "dump",   Dump.main Format.std_formatter $$ path tracefile;
-    "run",    run ~fs ~proc_mgr              $$ child_args;
+    "run",    run ~fs ~proc_mgr              $$ freq $ child_args;
     "show",   show                           $$ tracefiles;
     "render", render                         $$ tracefile $ imagefile;
   ]
