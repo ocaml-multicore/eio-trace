@@ -42,10 +42,12 @@ let zoom_to t z =
 let zoom t delta =
   zoom_to t (t.zoom +. delta)
 
-let zoom_to_fit t =
-  let ppns = (t.width -. 2. *. h_margin) /. t.model.duration in
+let zoom_to_fit ?(start_time=0.0) ?(duration=infinity) t =
+  let start_time = min start_time t.model.duration in
+  let duration = min duration (t.model.duration -. start_time) in
+  let ppns = (t.width -. 2. *. h_margin) /. duration in
   zoom_to t (log ppns /. log 10.);
-  t.start_time <- -. timespan_of_width t h_margin
+  t.start_time <- start_time -. timespan_of_width t h_margin
 
 let max_x_scroll t =
   width_of_timespan t t.model.duration +. h_margin

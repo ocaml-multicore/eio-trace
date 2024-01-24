@@ -3,6 +3,21 @@ open Cmdliner
 let ( $ ) = Term.app
 let ( $$ ) f x = Term.const f $ x
 
+let time =
+  let parse s =
+    Scanf.sscanf_opt s "%f %s" @@ fun v units ->
+    match units with
+    | "" -> Ok v
+    | "m" -> Ok (v *. 60.)
+    | "ms" -> Ok (v /. 1e3)
+    | "us" -> Ok (v /. 1e6)
+    | "ns" -> Ok (v /. 1e9)
+    | x -> Fmt.error "Unknown time unit %S" x
+  in
+  let parse s = Option.value (parse s) ~default:(Fmt.error "Invalid duration %S" s) in
+  let print f x = Fmt.pf f "%fns" x in
+  Arg.conv' (parse, print)
+
 let tracefile =
   let doc = "The path of the trace file." in
   Arg.(value @@ opt string "trace.fxt" @@ info ["f"; "tracefile"] ~docv:"PATH" ~doc)
@@ -18,6 +33,14 @@ let imagefile =
 let freq =
   let doc = "How many times per second to check for events." in
   Arg.(value @@ opt float 100.0 @@ info ["F"; "freq"] ~docv:"RATE" ~doc)
+
+let start_time =
+  let doc = "Seconds to skip before the section to display." in
+  Arg.(value @@ opt (some time) None @@ info ["s"; "start-time"] ~doc)
+
+let duration =
+  let doc = "Width of the output image in seconds." in
+  Arg.(value @@ opt (some time) None @@ info ["d"; "duration"] ~doc)
 
 let child_args =
   let doc = "The command to be executed and monitored." in
@@ -57,10 +80,12 @@ let run ~fs ~proc_mgr freq args =
 let record ~fs ~proc_mgr freq tracefile args =
   Record.run ~fs ~proc_mgr ~freq ~tracefile args
 
-let render tracefile output =
-  if Filename.check_suffix output ".svg" then
-    exec_gtk ["render-svg"; tracefile; output]
-  else
+let render tracefile output start_time duration =
+  if Filename.check_suffix output ".svg" then (
+    let start_time = Option.value start_time ~default:0.0 |> string_of_float in
+    let duration = Option.map string_of_float duration |> Option.value ~default:"" in
+    exec_gtk ["render-svg"; tracefile; output; start_time; duration]
+  ) else
     Fmt.error "Unknown file extension in %S (should end in e.g. '.svg')" output
 
 let cmd env =
@@ -73,7 +98,7 @@ let cmd env =
     "dump",   Dump.main Format.std_formatter $$ path tracefile;
     "run",    run ~fs ~proc_mgr              $$ freq $ child_args;
     "show",   show                           $$ tracefiles;
-    "render", render                         $$ tracefile $ imagefile;
+    "render", render                         $$ tracefile $ imagefile $ start_time $ duration;
   ]
 
 let () =

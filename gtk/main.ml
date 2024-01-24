@@ -22,14 +22,14 @@ let show ?args tracefile =
   in
   Gtk_ui.create ~title (load tracefile)
 
-let render ~output tracefile =
+let render ~output ~start_time ~duration tracefile =
   let m = load (tracefile) in
   let v =
     View.of_model m
       ~width:1280.
       ~height:((float m.height +. 0.5) *. View.pixels_per_row +. 2. *. View.v_margin)
   in
-  View.zoom_to_fit v;
+  View.zoom_to_fit v ~start_time ~duration;
   let surface = Cairo.SVG.create
     output
     ~w:v.width
@@ -45,5 +45,16 @@ let () =
   match Array.to_list Sys.argv with
   | _ :: "show" :: tracefiles -> List.iter show tracefiles; GMain.main ()
   | _ :: "run" :: tracefile :: args -> show ~args tracefile; GMain.main ()
-  | [ _; "render-svg"; tracefile; output ] -> render tracefile ~output
-  | _ -> failwith "Invalid arguments (eio-trace-gtk should be run via eio-trace)"
+  | [ _; "render-svg"; tracefile; output; start_time; duration ] ->
+    let duration =
+      match duration with
+      | "" -> infinity
+      | x -> float_of_string x *. 1e9
+    in
+    render tracefile
+      ~output
+      ~start_time:(float_of_string start_time *. 1e9)
+      ~duration
+  | args ->
+    Fmt.failwith "Invalid arguments (eio-trace-gtk should be run via eio-trace)@.(got %a)"
+      Fmt.(Dump.list string) args
