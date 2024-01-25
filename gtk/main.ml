@@ -8,7 +8,7 @@ let load tracefile =
   let data = really_input_string ch len in
   close_in ch;
   let trace = Trace.create data in
-  Model.of_trace trace
+  Layout.of_trace trace
 
 let show ?args tracefile =
   let title =
@@ -23,11 +23,11 @@ let show ?args tracefile =
   Gtk_ui.create ~title (load tracefile)
 
 let render ~output ~start_time ~duration ~format tracefile =
-  let m = load (tracefile) in
+  let l = load (tracefile) in
   let v =
-    View.of_model m
+    View.of_layout l
       ~width:1280.
-      ~height:((float m.height +. 0.5) *. View.pixels_per_row +. 2. *. View.v_margin)
+      ~height:((float l.height +. 0.5) *. View.pixels_per_row +. 2. *. View.v_margin)
   in
   View.zoom_to_fit v ~start_time ~duration;
   let create =

@@ -1,8 +1,8 @@
 type t = {
-  model : Model.t;
+  layout : Layout.t;
   mutable width : float;                (* Canvas width in pixels *)
   mutable height : float;
-  mutable start_time : float;           (* Time after model start (ns) *)
+  mutable start_time : float;           (* Time after layout start (ns) *)
   mutable scroll_y : float;             (* Pixels *)
   mutable pixels_per_ns : float;
   mutable zoom : float;
@@ -43,17 +43,17 @@ let zoom t delta =
   zoom_to t (t.zoom +. delta)
 
 let zoom_to_fit ?(start_time=0.0) ?duration t =
-  let start_time = min start_time t.model.duration in
-  let duration = Option.value duration ~default:(t.model.duration -. start_time) in
+  let start_time = min start_time t.layout.duration in
+  let duration = Option.value duration ~default:(t.layout.duration -. start_time) in
   let ppns = (t.width -. 2. *. h_margin) /. duration in
   zoom_to t (log ppns /. log 10.);
   t.start_time <- start_time -. timespan_of_width t h_margin
 
 let max_x_scroll t =
-  width_of_timespan t t.model.duration +. h_margin
+  width_of_timespan t t.layout.duration +. h_margin
 
 let max_y_scroll t =
-  float t.model.height *. pixels_per_row +. v_margin
+  float t.layout.height *. pixels_per_row +. v_margin
 
 let scroll_bounds t =
   (
@@ -63,7 +63,7 @@ let scroll_bounds t =
 
 let set_start_time t time =
   let margin_time = timespan_of_width t h_margin in
-  t.start_time <- clamp time ~min:(-. margin_time) ~max:(t.model.duration +. margin_time);
+  t.start_time <- clamp time ~min:(-. margin_time) ~max:(t.layout.duration +. margin_time);
   t.start_time *. t.pixels_per_ns
 
 let set_scroll_y t y =
@@ -74,7 +74,7 @@ let set_size t width height =
   t.width <- width;
   t.height <- height
 
-let of_model model ~width ~height =
-  let t = { model; width; height; start_time = 0.; scroll_y = -. v_margin; pixels_per_ns = 0.0; zoom = -3.0 } in
+let of_layout layout ~width ~height =
+  let t = { layout; width; height; start_time = 0.; scroll_y = -. v_margin; pixels_per_ns = 0.0; zoom = -3.0 } in
   zoom t 0.0;
   t

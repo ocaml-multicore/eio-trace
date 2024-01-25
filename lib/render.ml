@@ -90,17 +90,17 @@ module Make (C : CANVAS) = struct
     float row *. Style.line_spacing -. v.View.scroll_y
 
   let iter_spans v fn item =
-    Array.iter fn item.Model.activations;
-    let stop = Option.value item.end_time ~default:v.View.model.duration in
+    Array.iter fn item.Layout.activations;
+    let stop = Option.value item.end_time ~default:v.View.layout.duration in
     fn (stop, [])
 
   let link_fibers v cr ~x a b =
-    let upper, lower = if a.Model.y < b.Model.y then a, b else b, a in
+    let upper, lower = if a.Layout.y < b.Layout.y then a, b else b, a in
     C.move_to cr ~x ~y:(y_of_row v upper.y +. Style.fiber_padding_top);
     C.line_to cr ~x ~y:(y_of_row v lower.y +. Style.fiber_padding_top +. Style.fiber_height);
     C.stroke cr
 
-  let rec render_events v cr (item : Model.item) =
+  let rec render_events v cr (item : Layout.item) =
     for i = 0 to Array.length item.events - 1 do
       let (ts, e) = item.events.(i) in
       let next =
@@ -108,9 +108,9 @@ module Make (C : CANVAS) = struct
           Some (fst (item.events.(i + 1)))
         else item.end_time
       in
-      match (e : Model.event) with
+      match (e : Layout.event) with
       | Add_fiber { parent; child } ->
-        let parent = Model.get v.View.model parent |> Option.value ~default:item in
+        let parent = Layout.get v.View.layout parent |> Option.value ~default:item in
         render_fiber v cr ts child;
         Style.running_fiber cr;
         let x = View.x_of_time v ts in
@@ -132,7 +132,7 @@ module Make (C : CANVAS) = struct
           ?clip_area
     done
 
-  and render_fiber v cr start_time (f : Model.item) =
+  and render_fiber v cr start_time (f : Layout.item) =
     let y = y_of_row v f.y in
     if y < v.height then (
 (*
@@ -179,7 +179,7 @@ module Make (C : CANVAS) = struct
       render_events v cr f
     )
 
-  and render_cc v cr start_time (cc : Model.item) ty =
+  and render_cc v cr start_time (cc : Layout.item) ty =
     render_events v cr cc;
     let label = Option.value cc.name ~default:ty in
     let x = View.x_of_time v start_time in
@@ -202,15 +202,15 @@ module Make (C : CANVAS) = struct
     C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) ~clip_area:(clip_width -. 2., v.height) label
 
   let iter_gc_spans v fn ring =
-    let arr = ring.Model.Ring.events in
+    let arr = ring.Layout.Ring.events in
     (* todo: binary search *)
     for i = 0 to Array.length arr - 1 do
       let time, e = arr.(i) in
       fn (time, e)
     done;
-    fn (v.View.model.duration, [])
+    fn (v.View.layout.duration, [])
 
-  let render_gc_events v cr (ring : Model.Ring.t) =
+  let render_gc_events v cr (ring : Layout.Ring.t) =
     let y = y_of_row v ring.y in
     let h = float ring.height *. Style.line_spacing in
     let prev_stack = ref [] in
@@ -274,5 +274,5 @@ module Make (C : CANVAS) = struct
     C.paint cr;
     render_grid v cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    v.model.rings |> Trace.Rings.iter (fun _id -> render_ring v cr)
+    v.layout.rings |> Trace.Rings.iter (fun _id -> render_ring v cr)
 end

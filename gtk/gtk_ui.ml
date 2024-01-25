@@ -3,7 +3,7 @@ open Eio_trace
 let ( ==> ) signal callback =
   ignore (signal ~callback : GtkSignal.id)
 
-let create ~title model =
+let create ~title layout =
   let window = GWindow.window () in
   window#set_title title;
   window#event#connect#delete ==> (fun _ -> GMain.quit (); true);
@@ -13,7 +13,7 @@ let create ~title model =
   let area = GMisc.drawing_area ~packing:(table#attach ~left:0 ~top:0 ~expand:`BOTH ~fill:`BOTH) () in
   let _hscroll = GRange.scrollbar `HORIZONTAL ~adjustment:hadjustment ~packing:(table#attach ~left:0 ~top:1 ~expand:`X ~fill:`BOTH) () in
   let _vscroll = GRange.scrollbar `VERTICAL ~adjustment:vadjustment ~packing:(table#attach ~left:1 ~top:0 ~expand:`Y ~fill:`BOTH) () in
-  let v = View.of_model model ~width:1000. ~height:1000. in
+  let v = View.of_layout layout ~width:1000. ~height:1000. in
   let set_scollbars () =
     let (xlo, xhi, xsize, xvalue), (ylo, yhi, ysize, yvalue) = View.scroll_bounds v in
     hadjustment#set_bounds ~lower:xlo ~upper:xhi ~page_size:xsize ();
@@ -102,7 +102,7 @@ let create ~title model =
   let height =
     int_of_float @@ min
       (float (Gdk.Screen.height ()) *. 0.8)
-      ((float v.model.height +. 1.) *. View.pixels_per_row +. 2. *. View.v_margin)
+      ((float v.layout.height +. 1.) *. View.pixels_per_row +. 2. *. View.v_margin)
   in
   window#set_default_size
     ~width:(int_of_float (float (Gdk.Screen.width ()) *. 0.8))
