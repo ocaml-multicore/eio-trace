@@ -1,3 +1,5 @@
+let debug_layout = false
+
 type timestamp = float    (* ns since start_time *)
 
 module Ids = Map.Make(Int)
@@ -62,6 +64,9 @@ module Ring = struct
 
   type t = {
     events : (timestamp * string list) array;
+    mutable y : int;
+    mutable height : int;
+    mutable roots : (timestamp * item) list;
   }
 end
 
@@ -69,7 +74,6 @@ type t = {
   items : item Ids.t;
   start_time : int64;
   duration : float;
-  root : Ring.id * item;
   height : int;
   rings : Ring.t Trace.Rings.t;
 }
@@ -93,10 +97,10 @@ let as_string = function
   | `String s -> s
   | _ -> failwith "Not a string"
 
-let layout ~duration root =
+let layout ~duration (ring : Ring.t) =
   let max_y = ref 1 in
   let rec visit ~y (i : item) =
-    Fmt.epr "%d is at %d@." i.id y;
+    if debug_layout then Fmt.epr "%d is at %d@." i.id y;
     i.y <- y;
     i.height <- 1;
     i.end_cc_label <- None;
@@ -109,7 +113,7 @@ let layout ~duration root =
             )
         | Add_fiber _ -> ()
         | Create_cc (_, child) ->
-          Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
+          if debug_layout then Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
           if i.end_cc_label = None then (
               i.end_cc_label <- Some ts;
             );
@@ -124,7 +128,7 @@ let layout ~duration root =
         match e with
         | Log _ | Create_cc _ -> ()
         | Add_fiber { parent; child } ->
-          Fmt.epr "%d gets fiber %d, created by %d@." i.id child.id parent;
+          if debug_layout then Fmt.epr "%d gets fiber %d, created by %d@." i.id child.id parent;
           let stop = Option.value child.end_time ~default:duration in
           intervals := { Itv.value = child; start = ts; stop } :: !intervals;
       );
@@ -143,28 +147,28 @@ let layout ~duration root =
       );
     i.height <- !height;
     max_y := max !max_y i.y;
-    Fmt.epr "%d is at %d+%d@." i.id y i.height;
+    if debug_layout then Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
-  let visit_domain ~y i =
-    i.y <- y;
+  let visit_domain (_ts, (i : item)) =
+    i.y <- ring.y;
     i.height <- 0;
     i.end_cc_label <- None;
     i.events |> Array.iter (fun (_ts, e) ->
         match e with
         | Log _ | Create_cc _ -> ()
         | Add_fiber { parent = _; child } ->
-          visit ~y:(y + i.height) child;
-          i.height <- child.y - y + child.height;
+          visit ~y:(ring.y + i.height) child;
+          i.height <- child.y - ring.y + child.height;
           if i.end_cc_label = None then (
               i.end_cc_label <- child.end_cc_label;
             );
       );
   in
-  visit_domain root ~y:0;
-  !max_y + 1
+  List.iter visit_domain ring.roots;
+  ring.height <- (!max_y + 1) - ring.y
 
 let of_trace (trace : Trace.t) =
-  let start_time, ring_id, root = Option.get trace.root in
+  let start_time = trace.start_time in
   let duration = ref 0.0 in
   let time ts =
     let f = Int64.sub ts start_time |> Int64.to_float in
@@ -206,14 +210,20 @@ let of_trace (trace : Trace.t) =
   in
   let import_ring r =
     let events = List.map (fun (ts, s) -> time ts, s) r.Trace.Ring.events |> List.rev |> Array.of_list in
-    { Ring.events }
+    let roots = List.map (fun (ts, i) -> time ts, import i) (List.rev r.roots) in
+    { Ring.events; y = 0; height = 1; roots }
   in
-  let root = import root in
+  let rings = Trace.Rings.map import_ring trace.rings in
   let items = !items in
   let duration = !duration in
-  let height = layout root ~duration in
-  let rings = Trace.Rings.map import_ring trace.rings in
-  { start_time; duration; root = (ring_id, root); height; items; rings }
+  let y = ref 0 in
+  rings |> Trace.Rings.iter (fun _ (ring : Ring.t) ->
+      ring.y <- !y;
+      layout ring ~duration;
+      y := !y + ring.height;
+    );
+  let height = !y in
+  { start_time; duration; height; items; rings }
 
 let start_time t = t.start_time
 

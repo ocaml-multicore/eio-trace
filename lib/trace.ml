@@ -35,25 +35,26 @@ module Ring = struct
   type t = {
     mutable current_fiber : int option;
     mutable events : (timestamp * string list) list;
+    mutable roots : (timestamp * item) list;
   }
 end
 
 type t = {
-  mutable root : (timestamp * Ring.id * item) option;
+  mutable start_time : timestamp;
   mutable rings : Ring.t Rings.t;
   mutable items : item Ids.t;
 }
 
-let get_domain t ring =
+let get_ring t ring =
   match Rings.find_opt ring t.rings with
   | Some x -> x
   | None ->
-    let x = { Ring.current_fiber = None; events = [] } in
+    let x = { Ring.current_fiber = None; events = []; roots = [] } in
     t.rings <- Rings.add ring x t.rings;
     x
 
 let current_fiber t ring =
-  let d = get_domain t ring in
+  let d = get_ring t ring in
   Option.map (fun id -> Ids.find id t.items) d.current_fiber
 
 let get t id =
@@ -70,7 +71,7 @@ let add_activation item ts x =
   item.activations <- (ts, x) :: item.activations
 
 let set_fiber t ring ts id =
-  let d = get_domain t ring in
+  let d = get_ring t ring in
   current_fiber t ring |> Option.iter (fun old -> add_activation old ts `Pause);
   d.current_fiber <- Some id;
   let f = get t id in
@@ -84,7 +85,7 @@ let domain_of_thread t (thread : Read.thread) =
   let id = i64 thread.tid in
   if id land 3 = 1 then (
     let ring = id lsr 2 in
-    Some (get_domain t ring)
+    Some (get_ring t ring)
   ) else None
 
 let fiber_of_thread t (thread : Read.thread) =
@@ -104,21 +105,23 @@ let as_int64 = function
 
 let process_event t e =
   let { Read.Event.ty; timestamp; thread; category; name; args } = e in
+  t.start_time <- min t.start_time timestamp;
   match category, name, ty with
   | "eio", "cc", Duration_begin ->
     let id = List.assoc_opt "id" args |> Option.get |> id_of_pointer in
     let ty = List.assoc_opt "type" args |> Option.get |> as_string in
+    let ring_id = List.assoc_opt "cpu" args |> Option.get |> as_int64 |> Int64.to_int in
+    let ring = get_ring t ring_id in
     let cc = get t id in
-    if t.root = None then (
-      let ring_id = List.assoc_opt "cpu" args |> Option.get |> as_int64 |> Int64.to_int in
-      t.root <- Some (timestamp, ring_id, cc);
-    );
-    fiber_of_thread t thread |> Option.iter (fun parent_fiber ->
+    begin match fiber_of_thread t thread with
+    | Some parent_fiber ->
         let parent_item = get t (parent_fiber.inner_cc) in
         parent_item.events <- (timestamp, Create_cc (ty, cc)) :: parent_item.events;
         cc.parent <- Some parent_item;
         parent_fiber.inner_cc <- id
-      )
+    | None ->
+      ring.roots <- (timestamp, cc) :: ring.roots
+    end
   | "eio", "cc", Duration_end ->
     fiber_of_thread t thread |> Option.iter @@ fun fiber ->
     let inner_cc = fiber.inner_cc in
@@ -138,14 +141,13 @@ let process_event t e =
     let cc = List.assoc_opt "cc" args |> Option.get |> id_of_pointer in
     let child = get t id in
     Ids.find_opt cc t.items |> Option.iter (fun cc ->
+        let parent = fiber_of_thread t thread in
         let parent =
-          match fiber_of_thread t thread, t.root with
-          | Some f, _ -> Some f
-          | None, Some (_, _, root) -> Some root
-          | None, _ -> None
+          match parent with
+          | Some p -> p.id
+          | None -> cc.id
         in
-        parent |> Option.iter @@ fun parent ->
-        cc.events <- (timestamp, Add_fiber { parent = parent.id; child }) :: cc.events
+        cc.events <- (timestamp, Add_fiber { parent; child }) :: cc.events
       );
   | "eio", "log", Instant ->
     let msg = List.assoc_opt "message" args |> Option.get |> as_string in
@@ -195,7 +197,7 @@ let process t reader =
 
 let create data =
   let t = {
-    root = None;
+    start_time = Int64.max_int;
     rings = Rings.empty;
     items = Ids.empty;
   } in
