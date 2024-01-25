@@ -201,23 +201,22 @@ module Make (C : CANVAS) = struct
     in
     C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) ~clip_area:(clip_width -. 2., v.height) label
 
-  let iter_gc_spans (t0, t1) fn ring =
+  let iter_gc_spans v fn ring =
     let arr = ring.Model.Ring.events in
     (* todo: binary search *)
     for i = 0 to Array.length arr - 1 do
       let time, e = arr.(i) in
-      if time >= t0 && time < t1 then fn (time, e)
+      fn (time, e)
     done;
-    fn (t1, [])
+    fn (v.View.model.duration, [])
 
-  let render_gc_events v cr ring (cc : Model.item) (t0, t1) =
-    let y = y_of_row v cc.y in
-    let h = float cc.height *. Style.line_spacing in
-    let t1 = Option.value t1 ~default:v.View.model.duration in
+  let render_gc_events v cr (ring : Model.Ring.t) =
+    let y = y_of_row v ring.y in
+    let h = float ring.height *. Style.line_spacing in
     let prev_stack = ref [] in
-    let event = ref (t0, []) in
+    let event = ref (0.0, []) in
     C.set_font_size cr Style.small_text;
-    ring |> iter_gc_spans (t0, t1) (fun event' ->
+    ring |> iter_gc_spans v (fun event' ->
         let t0, stack = !event in
         event := event';
         let t1 = fst event' in
@@ -242,10 +241,9 @@ module Make (C : CANVAS) = struct
         prev_stack := stack
       )
 
-  let render_domain v cr start_time ring_id (cc : Model.item) =
-    let ring = Model.ring v.View.model ring_id in
-    render_gc_events v cr ring cc (start_time, cc.end_time);
-    render_events v cr cc
+  let render_ring v cr ring =
+    render_gc_events v cr ring;
+    List.iter (fun (_ts, cc) -> render_events v cr cc) ring.roots
 
   let render_grid v cr =
     C.set_line_width cr 1.0;
@@ -276,6 +274,5 @@ module Make (C : CANVAS) = struct
     C.paint cr;
     render_grid v cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-    let ring_id, cc = v.model.root in
-    render_domain v cr 0.0 ring_id cc
+    v.model.rings |> Trace.Rings.iter (fun _id -> render_ring v cr)
 end
