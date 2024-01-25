@@ -7,7 +7,8 @@ let time =
   let parse s =
     Scanf.sscanf_opt s "%f %s" @@ fun v units ->
     match units with
-    | "" -> Ok v
+    | ""
+    | "s" -> Ok v
     | "m" -> Ok (v *. 60.)
     | "ms" -> Ok (v /. 1e3)
     | "us" -> Ok (v /. 1e6)
