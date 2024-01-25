@@ -82,11 +82,14 @@ let record ~fs ~proc_mgr freq tracefile args =
   Record.run ~fs ~proc_mgr ~freq ~tracefile args
 
 let render tracefile output start_time duration =
-  if Filename.check_suffix output ".svg" then (
+  match Filename.extension output with
+  | "" -> Fmt.error "No extension on %S; can't determine format" output
+  | ".svg"
+  | ".png" as format ->
     let start_time = Option.value start_time ~default:0.0 |> string_of_float in
     let duration = Option.map string_of_float duration |> Option.value ~default:"" in
-    exec_gtk ["render-svg"; tracefile; output; start_time; duration]
-  ) else
+    exec_gtk ["render-svg"; tracefile; format; output; start_time; duration]
+  | _ ->
     Fmt.error "Unknown file extension in %S (should end in e.g. '.svg')" output
 
 let cmd env =
