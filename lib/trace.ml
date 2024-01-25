@@ -161,6 +161,7 @@ let process_event t e =
   | "eio.suspend", name, Duration_begin ->
     fiber_of_thread t thread |> Option.iter @@ fun fiber ->
     add_activation fiber timestamp (`Suspend_fiber name);
+  | "eio", ("suspend-domain" as phase), Duration_begin
   | "gc", phase, Duration_begin ->
     let d = domain_of_thread t thread |> Option.get in
     let stack =
@@ -169,7 +170,8 @@ let process_event t e =
       | (_, s) :: _ -> s
     in
     d.events <- (timestamp, phase :: stack) :: d.events;
-  | "gc", _phase, Duration_end ->
+  | "eio", "suspend-domain", Duration_end
+  | "gc", _, Duration_end ->
     let d = domain_of_thread t thread |> Option.get in
     let stack =
       match d.events with

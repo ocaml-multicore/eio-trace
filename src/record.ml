@@ -131,6 +131,10 @@ let callbacks t =
        | `Log msg -> Write.instant_event t.fxt ~thread ~ts ~name:"log" ~category:"eio" ~args:[
            "message", `String msg;
          ]
+       | `Suspend_domain Begin ->
+         Write.duration_begin t.fxt ~thread:(ring_thread t ring_id) ~ts ~name:"suspend-domain" ~category:"eio"
+       | `Suspend_domain End ->
+         Write.duration_end t.fxt ~thread:(ring_thread t ring_id) ~ts ~name:"suspend-domain" ~category:"eio"
        | _ -> ()
     )
 
