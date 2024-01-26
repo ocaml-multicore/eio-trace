@@ -150,7 +150,7 @@ let layout ~duration (ring : Ring.t) =
     if debug_layout then Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
   let visit_domain (_ts, (i : item)) =
-    i.y <- ring.y;
+    i.y <- ring.y + 1;
     i.height <- 1;
     i.end_cc_label <- None;
     i.events |> Array.iter (fun (_ts, e) ->
