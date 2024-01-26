@@ -1,8 +1,7 @@
 # eio-trace
 
-Status: early prototype, and requires a development version of Eio
-
-eio-trace can be used to record and display traces of programs using the [Eio][] library.
+eio-trace can be used to record and display traces of programs using the [Eio][] library
+(requires Eio 0.14 or later).
 
 To install eio-trace:
 
