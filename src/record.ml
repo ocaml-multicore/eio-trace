@@ -122,7 +122,8 @@ let callbacks t =
          Write.user_object t.fxt ~name ~thread (Int64.of_int id)
        | `Suspend_fiber op ->
          Option.iter (fun f -> f.op <- Some op) current_fiber;
-         Write.duration_begin t.fxt ~thread ~ts ~name:op ~category:"eio.suspend"
+         Write.duration_begin t.fxt ~thread ~ts ~name:op ~category:"eio.suspend";
+         ring.current_fiber <- None
        | `Enter_span op ->
          Write.duration_begin t.fxt ~thread ~name:op ~category:"eio.span" ~ts
        | `Exit_span ->
