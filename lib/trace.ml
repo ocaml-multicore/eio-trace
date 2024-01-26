@@ -37,6 +37,22 @@ module Ring = struct
     mutable events : (timestamp * string list) list;
     mutable roots : (timestamp * item) list;
   }
+
+  let push t ts e =
+    let stack =
+      match t.events with
+      | [] -> []
+      | (_, s) :: _ -> s
+    in
+    t.events <- (ts, e :: stack) :: t.events
+
+  let pop t ts =
+    let stack =
+      match t.events with
+      | [] -> []
+      | (_, s) :: _ -> s
+    in
+    t.events <- (ts, List.tl stack) :: t.events
 end
 
 type t = {
@@ -81,7 +97,7 @@ let id_of_pointer = function
   | `Pointer x -> i64 x
   | _ -> failwith "Not a pointer type!"
 
-let domain_of_thread t (thread : Read.thread) =
+let ring_of_thread t (thread : Read.thread) =
   let id = i64 thread.tid in
   if id land 3 = 1 then (
     let ring = id lsr 2 in
@@ -131,11 +147,15 @@ let process_event t e =
         fiber.inner_cc <- parent_item.id;
       )
   | "eio.span", name, Duration_begin ->
-    fiber_of_thread t thread |> Option.iter @@ fun fiber ->
-    add_activation fiber timestamp (`Enter_span name)
+    begin match fiber_of_thread t thread with
+      | Some fiber -> add_activation fiber timestamp (`Enter_span name)
+      | None -> ring_of_thread t thread |> Option.iter (fun ring -> Ring.push ring timestamp name)
+    end
   | "eio.span", _name, Duration_end ->
-    fiber_of_thread t thread |> Option.iter @@ fun fiber ->
-    add_activation fiber timestamp `Exit_span
+    begin match fiber_of_thread t thread with
+      | Some fiber -> add_activation fiber timestamp `Exit_span
+      | None -> ring_of_thread t thread |> Option.iter (fun ring -> Ring.pop ring timestamp)
+    end
   | "eio", "create-fiber", Instant ->
     let id = List.assoc_opt "id" args |> Option.get |> id_of_pointer in
     let cc = List.assoc_opt "cc" args |> Option.get |> id_of_pointer in
@@ -163,22 +183,12 @@ let process_event t e =
     add_activation fiber timestamp (`Suspend_fiber name);
   | "eio", ("suspend-domain" as phase), Duration_begin
   | "gc", phase, Duration_begin ->
-    let d = domain_of_thread t thread |> Option.get in
-    let stack =
-      match d.events with
-      | [] -> []
-      | (_, s) :: _ -> s
-    in
-    d.events <- (timestamp, phase :: stack) :: d.events;
+    let r = ring_of_thread t thread |> Option.get in
+    Ring.push r timestamp phase
   | "eio", "suspend-domain", Duration_end
   | "gc", _, Duration_end ->
-    let d = domain_of_thread t thread |> Option.get in
-    let stack =
-      match d.events with
-      | [] -> []
-      | (_, s) :: _ -> s
-    in
-    d.events <- (timestamp, List.tl stack) :: d.events
+    let r = ring_of_thread t thread |> Option.get in
+    Ring.pop r timestamp
   | _ -> ()
 
 let process t reader =

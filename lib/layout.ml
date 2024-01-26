@@ -151,7 +151,7 @@ let layout ~duration (ring : Ring.t) =
   in
   let visit_domain (_ts, (i : item)) =
     i.y <- ring.y;
-    i.height <- 0;
+    i.height <- 1;
     i.end_cc_label <- None;
     i.events |> Array.iter (fun (_ts, e) ->
         match e with
