@@ -10,7 +10,7 @@
  (synopsis "Trace visualisation for Eio programs")
  (depends
   (ocaml (>= 5.1.0))
-  (eio_main (>= 0.13))
+  (eio_main (>= 0.14))
   (cmdliner (>= 1.2.0))
   (lablgtk3 (>= 3.1.3))
   (crowbar (and (>= 0.2.1) :with-test))))

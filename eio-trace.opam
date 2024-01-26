@@ -8,7 +8,7 @@ bug-reports: "https://github.com/talex5/eio-trace/issues"
 depends: [
   "dune" {>= "3.11"}
   "ocaml" {>= "5.1.0"}
-  "eio_main" {>= "0.13"}
+  "eio_main" {>= "0.14"}
   "cmdliner" {>= "1.2.0"}
   "lablgtk3" {>= "3.1.3"}
   "crowbar" {>= "0.2.1" & with-test}
