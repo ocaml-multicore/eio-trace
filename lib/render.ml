@@ -215,7 +215,7 @@ module Make (C : CANVAS) = struct
     let h = float ring.height *. Style.line_spacing in
     let prev_stack = ref [] in
     let event = ref (0.0, []) in
-    C.set_font_size cr Style.small_text;
+    C.set_font_size cr Style.big_text;
     ring |> iter_gc_spans v (fun event' ->
         let t0, stack = !event in
         event := event';
@@ -226,7 +226,7 @@ module Make (C : CANVAS) = struct
         begin match stack with
           | [] -> ()
           | op :: p ->
-            let g = min 1.0 (0.1 *. float (List.length stack)) in
+            let g = 1.0 -. min 1.0 (0.1 *. float (List.length stack)) in
             C.set_source_rgba cr ~r:g ~g:g ~b:(g /. 2.) ~a:0.9;
             C.rectangle cr ~x:x0 ~y ~w ~h;
             C.fill cr;
@@ -234,7 +234,7 @@ module Make (C : CANVAS) = struct
               let clip_area = (w -. 0.2, v.height) in
               if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
               else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-              C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 8.) op
+              C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
                 ~clip_area
             )
         end;
