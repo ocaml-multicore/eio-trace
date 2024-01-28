@@ -186,7 +186,7 @@ module Make (C : CANVAS) = struct
     let y = y_of_row v cc.y in
     let w =
       match cc.end_time with
-      | None -> v.width -. x
+      | None -> v.width -. x +. 100.
       | Some stop -> View.x_of_time v stop -. x
     in
     let h = float cc.height *. Style.line_spacing -. 4. in
