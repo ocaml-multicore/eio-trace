@@ -52,3 +52,33 @@ dune exec -- eio-trace render -f trace.fxt trace.svg
 
 [Eio]: https://github.com/ocaml-multicore/eio
 [Perfetto]: https://ui.perfetto.dev/
+
+## macOS
+
+These instructions will walk you through installing the system dependencies necessary in order to install eio-trace's dependencies from OPAM.
+
+These instructions make use of [Homebrew](https://brew.sh/), adapt them to MacPorts, Fink, etc., if needed.
+
+First ensure everything is up-to-date:
+```sh
+brew update
+brew upgrade
+opam update
+```
+
+Then install the required packages:
+```sh
+brew install bash cairo gtk+3 m4 pkg-config libffi
+```
+
+Consider restarting your terminal session at this stage.
+
+You can now install eio-trace's dependencies.
+
+### lablgtk3
+
+If installing `conf-gtk3` fails with a `libffi` version error, run the following before trying again:
+```sh
+export PKG_CONFIG_PATH=/usr/local/Cellar/libffi/3.4.4/lib/pkgconfig
+```
+Update the version number to match the currently installed version of libffi.
