@@ -1,6 +1,0 @@
-[submodule "eio"]
-	path = vendor/eio
-	url = https://github.com/ocaml-multicore/eio.git
-[submodule "lablgtk"]
-	path = vendor/lablgtk
-	url = https://github.com/talex5/lablgtk.git
