@@ -47,6 +47,9 @@ module Make (C : CANVAS) = struct
 
     let running_fiber cr =
       C.set_source_rgb cr ~r:0.4 ~g:0.8 ~b:0.4
+
+    let suspended_fiber cr =
+      C.set_source_rgb cr ~r:0.4 ~g:0.4 ~b:0.4
   end
 
   (** Draw [msg] in the area (min_x, max_x) and ideally centred at [x]. *)
@@ -155,7 +158,7 @@ module Make (C : CANVAS) = struct
             let x1 = View.x_of_time v t1 in
             let w = x1 -. x0 in
             begin match stack with
-              | `Suspend _ :: _ -> C.set_source_rgb cr ~r:0.4 ~g:0.4 ~b:0.4
+              | `Suspend _ :: _ -> Style.suspended_fiber cr
               | `Span _ :: _ -> C.set_source_rgb cr ~r:0.5 ~g:0.9 ~b:0.5
               | [] -> Style.running_fiber cr
             end;
@@ -210,7 +213,7 @@ module Make (C : CANVAS) = struct
     done;
     fn (v.View.layout.duration, [])
 
-  let render_gc_events v cr (ring : Layout.Ring.t) =
+  let render_gc_events v cr (ring : Layout.Ring.t) layer =
     let y = y_of_row v ring.y in
     let h = float ring.height *. Style.line_spacing in
     let prev_stack = ref [] in
@@ -227,23 +230,52 @@ module Make (C : CANVAS) = struct
           | [] -> ()
           | op :: p ->
             let g = 1.0 -. min 1.0 (0.1 *. float (List.length stack)) in
-            C.set_source_rgba cr ~r:g ~g:g ~b:(g /. 2.) ~a:0.9;
-            C.rectangle cr ~x:x0 ~y ~w ~h;
-            C.fill cr;
-            if p == !prev_stack then (
-              let clip_area = (w -. 0.2, v.height) in
-              if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
-              else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-              C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
-                ~clip_area
-            )
+            match layer with
+            | `Bg ->
+              C.set_source_rgb cr ~r:g ~g:g ~b:(g /. 2.);
+              C.rectangle cr ~x:x0 ~y ~w ~h;
+              C.fill cr
+            | `Fg ->
+              if p == !prev_stack then (
+                let clip_area = (w -. 0.2, v.height) in
+                if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
+                else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+                C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
+                  ~clip_area
+              )
         end;
         prev_stack := stack
       )
 
-  let render_ring v cr ring =
-    render_gc_events v cr ring;
-    List.iter (fun (_ts, cc) -> render_events v cr cc) ring.roots
+  let link_domain v cr ~x (fiber : Layout.item) (ring : Layout.Ring.t) =
+    let fiber_y = y_of_row v fiber.y +. Style.fiber_padding_top in
+    let ring_y = y_of_row v ring.y in
+    let (y1, y2) =
+      if fiber.y < ring.y then (
+        (fiber_y +. Style.fiber_height, ring_y +. float ring.height *. View.pixels_per_row)
+      ) else (
+        fiber_y, ring_y
+      )
+    in
+    Style.suspended_fiber cr;
+    C.move_to cr ~x ~y:y1;
+    C.line_to cr ~x ~y:y2;
+    C.stroke cr
+
+  let render_ring_bg v cr ring =
+    render_gc_events v cr ring `Bg;
+    ring.roots |> List.iter @@ fun (root : Layout.Ring.root) ->
+    C.set_line_width cr 4.0;
+    root.parent |> Option.iter (fun (ts, parent) ->
+        Layout.get v.layout parent |> Option.iter @@ fun (parent : Layout.item) ->
+        let x = View.x_of_time v ts in
+        link_domain v cr ~x parent ring
+      )
+
+  let render_ring v cr (ring : Layout.Ring.t) =
+    render_gc_events v cr ring `Fg;
+    ring.roots |> List.iter @@ fun (root : Layout.Ring.root) ->
+    root.cc |> Option.iter (fun (_ts, cc) -> render_events v cr cc)
 
   let render_grid v cr =
     C.set_line_width cr 1.0;
@@ -272,6 +304,7 @@ module Make (C : CANVAS) = struct
   let render (v : View.t) cr =
     C.set_source_rgb cr ~r:0.9 ~g:0.9 ~b:0.9;
     C.paint cr;
+    v.layout.rings |> Trace.Rings.iter (fun _id -> render_ring_bg v cr);
     render_grid v cr;
     C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
     v.layout.rings |> Trace.Rings.iter (fun _id -> render_ring v cr)

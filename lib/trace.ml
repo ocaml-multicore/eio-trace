@@ -32,10 +32,15 @@ and item = {
 module Ring = struct
   type id = int
 
+  type root = {
+    mutable parent : (timestamp * int) option;
+    mutable cc : (timestamp * item) option;
+  }
+
   type t = {
     mutable current_fiber : int option;
     mutable events : (timestamp * string list) list;
-    mutable roots : (timestamp * item) list;
+    mutable roots : root list;
   }
 
   let push t ts e =
@@ -136,7 +141,12 @@ let process_event t e =
         cc.parent <- Some parent_item;
         parent_fiber.inner_cc <- id
     | None ->
-      ring.roots <- (timestamp, cc) :: ring.roots
+        begin match ring.roots with
+        | root :: _ when root.cc = None -> root.cc <- Some (timestamp, cc)
+        | _ ->
+          let root = { Ring.parent = None; cc = Some (timestamp, cc) } in
+          ring.roots <- root :: ring.roots
+        end
     end
   | "eio", "cc", Duration_end ->
     fiber_of_thread t thread |> Option.iter @@ fun fiber ->
@@ -189,6 +199,12 @@ let process_event t e =
   | "gc", _, Duration_end ->
     let r = ring_of_thread t thread |> Option.get in
     Ring.pop r timestamp
+  | "eio", "domain-spawn", Instant ->
+    ring_of_thread t thread |> Option.iter (fun (ring : Ring.t) ->
+        let parent = List.assoc_opt "parent" args |> Option.get |> id_of_pointer in
+        let root = { Ring.parent = Some (timestamp, parent); cc = None } in
+        ring.roots <- root :: ring.roots
+      )
   | _ -> ()
 
 let process t reader =
