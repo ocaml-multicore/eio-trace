@@ -82,6 +82,8 @@ let callbacks t =
          Write.thread_wakeup ~cpu:ring_id ~ts t.fxt (Int64.of_int id)
        in
        (* Fmt.epr "%a@." Eio_runtime_events.pp_event e; *)
+       (* Allow matching unknown events so we can build with older Eio versions if needed. *)
+       let e = (e : Eio_runtime_events.event :> [> Eio_runtime_events.event]) in
        match e with
        | `Fiber id ->
          set_current_fiber id;
@@ -136,6 +138,10 @@ let callbacks t =
          Write.duration_begin t.fxt ~thread:(ring_thread t ring_id) ~ts ~name:"suspend-domain" ~category:"eio"
        | `Suspend_domain End ->
          Write.duration_end t.fxt ~thread:(ring_thread t ring_id) ~ts ~name:"suspend-domain" ~category:"eio"
+       | `Domain_spawn parent ->
+         Write.instant_event t.fxt ~thread ~ts ~name:"domain-spawn" ~category:"eio" ~args:[
+           "parent", `Pointer (Int64.of_int parent);
+         ];
        | _ -> ()
     )
 

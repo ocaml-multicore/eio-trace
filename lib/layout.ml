@@ -62,11 +62,16 @@ and item = {
 module Ring = struct
   type id = Trace.Ring.id
 
+  type root = {
+    mutable parent : (timestamp * int) option;
+    mutable cc : (timestamp * item) option;
+  }
+
   type t = {
     events : (timestamp * string list) array;
     mutable y : int;
     mutable height : int;
-    mutable roots : (timestamp * item) list;
+    mutable roots : root list;
   }
 end
 
@@ -149,7 +154,8 @@ let layout ~duration (ring : Ring.t) =
     max_y := max !max_y i.y;
     if debug_layout then Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
-  let visit_domain (_ts, (i : item)) =
+  let visit_domain root =
+    root.Ring.cc |> Option.iter @@ fun (_ts, (i : item)) ->
     i.y <- ring.y + 1;
     i.height <- 1;
     i.end_cc_label <- None;
@@ -160,8 +166,8 @@ let layout ~duration (ring : Ring.t) =
           visit ~y:(ring.y + i.height) child;
           i.height <- child.y - ring.y + child.height;
           if i.end_cc_label = None then (
-              i.end_cc_label <- child.end_cc_label;
-            );
+            i.end_cc_label <- child.end_cc_label;
+          );
       );
   in
   List.iter visit_domain ring.roots;
@@ -208,9 +214,15 @@ let of_trace (trace : Trace.t) =
   and import_events events =
     events |> List.rev |> List.map (fun (ts, x) -> (time ts, map_event import x)) |> Array.of_list
   in
+  let import_root { Trace.Ring.parent; cc } =
+    {
+      Ring.parent = Option.map (fun (ts, id) -> time ts, id) parent;
+      cc = Option.map (fun (ts, i) -> time ts, import i) cc;
+    }
+  in
   let import_ring r =
     let events = List.map (fun (ts, s) -> time ts, s) r.Trace.Ring.events |> List.rev |> Array.of_list in
-    let roots = List.map (fun (ts, i) -> time ts, import i) (List.rev r.roots) in
+    let roots = List.map import_root (List.rev r.roots) in
     { Ring.events; y = 0; height = 1; roots }
   in
   let rings = Trace.Rings.map import_ring trace.rings in
