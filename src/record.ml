@@ -41,21 +41,27 @@ let get_fiber t id =
     t.fibers <- Fibers.add id x t.fibers;
     x
 
+let phase_useful = function
+  | Runtime_events.EV_DOMAIN_CONDITION_WAIT -> false    (* We don't know what systhread it came from *)
+  | _ -> true
+
 let callbacks t =
   Runtime_events.Callbacks.create ()
     ~runtime_begin:(fun ring ts phase ->
-        Write.duration_begin t.fxt
-          ~thread:(ring_thread t ring)
-          ~name:(Runtime_events.runtime_phase_name phase)
-          ~category:"gc"
-          ~ts:(Runtime_events.Timestamp.to_int64 ts)
+        if phase_useful phase then
+          Write.duration_begin t.fxt
+            ~thread:(ring_thread t ring)
+            ~name:(Runtime_events.runtime_phase_name phase)
+            ~category:"gc"
+            ~ts:(Runtime_events.Timestamp.to_int64 ts)
       )
     ~runtime_end:(fun ring ts phase ->
-        Write.duration_end t.fxt
-          ~thread:(ring_thread t ring)
-          ~name:(Runtime_events.runtime_phase_name phase)
-          ~category:"gc"
-          ~ts:(Runtime_events.Timestamp.to_int64 ts)
+        if phase_useful phase then
+          Write.duration_end t.fxt
+            ~thread:(ring_thread t ring)
+            ~name:(Runtime_events.runtime_phase_name phase)
+            ~category:"gc"
+            ~ts:(Runtime_events.Timestamp.to_int64 ts)
       )
     ~lost_events:(fun ring n -> traceln "Warning: ring %d lost %d events" ring n)
   |> Eio_runtime_events.add_callbacks
