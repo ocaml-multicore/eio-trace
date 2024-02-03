@@ -289,6 +289,7 @@ let records r =
       match record t r with
       | None -> seq ()
       | Some x -> Cons (x, seq)
+      | exception End_of_file -> Seq.Nil        (* File may be being written at the same time *)
     )
   in
   seq
