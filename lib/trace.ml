@@ -52,12 +52,13 @@ module Ring = struct
     t.events <- (ts, e :: stack) :: t.events
 
   let pop t ts =
-    let stack =
+    let tail =
       match t.events with
+      | (_, (_ :: x)) :: _ -> x
       | [] -> []
-      | (_, s) :: _ -> s
+      | _ :: _ -> print_endline "warning: unmatched pop!"; []
     in
-    t.events <- (ts, List.tl stack) :: t.events
+    t.events <- (ts, tail) :: t.events
 end
 
 type t = {
