@@ -50,9 +50,10 @@ module Args = struct
 
   let parse t cs : (string * value) * Cstruct.t =
     let header = Cstruct.LE.get_uint64 cs 0 in
-    let cs = Cstruct.shift cs 8 in
     let ty = i64 header land 0xf in
     let size = i64 (header >>> 4) land 0xfff in
+    let rest = Cstruct.shift cs (size * 8) in
+    let cs = Cstruct.shift cs 8 in
     let name = i64 (header >>> 16) land 0xffff in
     let name, cs = parse_string t name cs in
     let value =
@@ -67,8 +68,7 @@ module Args = struct
       | 8 -> `Koid (Cstruct.LE.get_uint64 cs 0)
       | x -> `Unknown x
     in
-    let cs = Cstruct.shift cs ((size - 1) * 8) in
-    (name, value), cs
+    (name, value), rest
 
   let pp_value f = function
     | `Int64 x -> Fmt.pf f "%Ld" x
@@ -289,6 +289,7 @@ let records r =
       match record t r with
       | None -> seq ()
       | Some x -> Cons (x, seq)
+      | exception End_of_file -> Seq.Nil        (* File may be being written at the same time *)
     )
   in
   seq
