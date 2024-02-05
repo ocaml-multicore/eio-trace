@@ -17,6 +17,7 @@ type activation = [
 
 type event =
   | Log of string
+  | Error of string
   | Create_cc of string * item
   | Add_fiber of { parent : int; child : item }
 and item = {
@@ -185,6 +186,11 @@ let process_event t e =
     fiber_of_thread t thread |> Option.iter @@ fun fiber ->
     let item = get t (fiber.inner_cc) in
     item.events <- (timestamp, Log msg) :: item.events
+  | "eio", "error", Instant ->
+    let id = List.assoc_opt "id" args |> Option.get |> id_of_pointer in
+    let msg = List.assoc_opt "message" args |> Option.get |> as_string in
+    let item = get t id in
+    item.events <- (timestamp, Error msg) :: item.events
   | "eio", "exit-fiber", Instant ->
     let id = List.assoc_opt "id" args |> Option.get |> id_of_pointer in
     let item = get t id in

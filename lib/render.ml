@@ -119,19 +119,26 @@ module Make (C : CANVAS) = struct
         let x = View.x_of_time v ts in
         link_fibers v cr ~x parent child
       | Create_cc (ty, cc) -> render_cc v cr ts cc ty
-      | Log msg ->
+      | Log msg | Error msg ->
+        let is_error = match e with Error _ -> true | _ -> false in
         let x = View.x_of_time v ts in
-        let y = y_of_row v item.y +. 10. in
-        C.move_to cr ~x ~y:(y +. 3.);
-        C.line_to cr ~x ~y:(y -. 3.);
-        C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+        let y = y_of_row v item.y in
+        if is_error then (
+          C.set_source_rgb cr ~r:0.8 ~g:0.0 ~b:0.0;
+          C.move_to cr ~x ~y;
+          C.line_to cr ~x ~y:(y +. float item.height *. View.pixels_per_row);
+        ) else (
+          C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+          C.move_to cr ~x ~y:(y +. 13.);
+          C.line_to cr ~x ~y:(y +. 7.);
+        );
         C.stroke cr;
         C.set_font_size cr Style.small_text;
         let clip_area = next |> Option.map (fun t2 ->
             let x2 = View.x_of_time v t2 in
             (x2 -. x -. 2.0, v.height)
           ) in
-        C.paint_text cr ~x:(x +. 2.) ~y:(y -. 2.) msg
+        C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) msg
           ?clip_area
     done
 
