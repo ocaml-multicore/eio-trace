@@ -148,6 +148,11 @@ let callbacks t =
          Write.instant_event t.fxt ~thread ~ts ~name:"domain-spawn" ~category:"eio" ~args:[
            "parent", `Pointer (Int64.of_int parent);
          ];
+       | `Error (id, err) ->
+         Write.instant_event t.fxt ~thread ~ts ~name:"error" ~category:"eio" ~args:[
+           "id", `Pointer (Int64.of_int id);
+           "message", `String err;
+         ]
        | _ -> ()
     )
 

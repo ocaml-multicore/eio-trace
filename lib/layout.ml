@@ -46,6 +46,7 @@ end
 
 type event =
   | Log of string
+  | Error of string
   | Create_cc of string * item
   | Add_fiber of { parent : int; child : item }
 and item = {
@@ -87,6 +88,7 @@ let get t id = Ids.find_opt id t.items
 
 let map_event f : Trace.event -> event = function
   | Log x -> Log x
+  | Error x -> Error x
   | Create_cc (ty, x) -> Create_cc (ty, f x)
   | Add_fiber { parent; child } -> Add_fiber { parent; child = f child }
 
@@ -112,7 +114,7 @@ let layout ~duration (ring : Ring.t) =
     let intervals = ref [] in
     i.events |> Array.iter (fun (ts, e) ->
         match e with
-        | Log _ ->
+        | Log _ | Error _ ->
           if i.end_cc_label = None then (
               i.end_cc_label <- Some ts;
             )
@@ -131,7 +133,7 @@ let layout ~duration (ring : Ring.t) =
     let start_fibers = List.length !intervals in
     i.events |> Array.iter (fun (ts, e) ->
         match e with
-        | Log _ | Create_cc _ -> ()
+        | Log _ | Error _ | Create_cc _ -> ()
         | Add_fiber { parent; child } ->
           if debug_layout then Fmt.epr "%d gets fiber %d, created by %d@." i.id child.id parent;
           let stop = Option.value child.end_time ~default:duration in
@@ -161,7 +163,7 @@ let layout ~duration (ring : Ring.t) =
     i.end_cc_label <- None;
     i.events |> Array.iter (fun (_ts, e) ->
         match e with
-        | Log _ | Create_cc _ -> ()
+        | Log _ | Error _ | Create_cc _ -> ()
         | Add_fiber { parent = _; child } ->
           visit ~y:(ring.y + i.height) child;
           i.height <- child.y - ring.y + child.height;
