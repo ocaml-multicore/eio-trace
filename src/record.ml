@@ -219,8 +219,9 @@ let run ?ui ?tracefile ~proc_mgr ~fs ~freq args =
     );
   Fiber.fork ~sw
     (fun () ->
-       Fun.protect (fun () -> Eio.Process.await_exn child)
-         ~finally:(fun () -> child_finished := true);
+       let r = Eio.Process.await child in
+       traceln "Child finished: %a" Eio.Process.pp_status r;
+       child_finished := true;
     );
   match ui with
   | None -> Ok ()
