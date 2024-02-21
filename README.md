@@ -81,8 +81,10 @@ dune exec -- eio-trace show trace.fxt
 To convert a trace to SVG format:
 
 ```
-dune exec -- eio-trace render -f trace.fxt trace.svg
+dune exec -- eio-trace render trace.fxt
 ```
+
+You can also use `--format=png` for PNG output.
 
 ## Reading traces
 
