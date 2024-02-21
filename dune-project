@@ -2,6 +2,7 @@
 (name eio-trace)
 (formatting disabled)
 (generate_opam_files true)
+(license ISC)
 (source (github ocaml-multicore/eio-trace))
 (maintainers "Thomas Leonard")
 (authors "Thomas Leonard")
