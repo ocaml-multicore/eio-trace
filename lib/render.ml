@@ -106,11 +106,6 @@ module Make (C : CANVAS) = struct
   let rec render_events v cr (item : Layout.item) =
     for i = 0 to Array.length item.events - 1 do
       let (ts, e) = item.events.(i) in
-      let next =
-        if i < Array.length item.events - 1 then
-          Some (fst (item.events.(i + 1)))
-        else item.end_time
-      in
       match (e : Layout.event) with
       | Add_fiber { parent; child } ->
         let parent = Layout.get v.View.layout parent |> Option.value ~default:item in
@@ -134,7 +129,16 @@ module Make (C : CANVAS) = struct
         );
         C.stroke cr;
         C.set_font_size cr Style.small_text;
-        let clip_area = next |> Option.map (fun t2 ->
+        let rec next i =
+          if i < Array.length item.events - 1 then (
+            match item.events.(i + 1) with
+            | (ts, (Log _ | Error _ | Create_cc _)) -> Some ts
+            | (_, Add_fiber _) -> next (i + 1)
+          ) else (
+            item.end_time
+          )
+        in
+        let clip_area = next i |> Option.map (fun t2 ->
             let x2 = View.x_of_time v t2 in
             (x2 -. x -. 2.0, v.height)
           ) in
