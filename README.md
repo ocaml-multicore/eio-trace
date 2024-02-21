@@ -97,7 +97,7 @@ Only one fiber in a domain can be running at a time.
 When a new fiber is created, a vertical green line links the parent fiber to the child.
 
 Cancellation contexts (including switches) are shown as brackets.
-Switched can be named using `Switch.run ~name`. Unnamed switches are shown as "switch".
+Switches can be named using `Switch.run ~name`. Unnamed switches are shown as "switch".
 A context being cancelled is indicated by a vertical red line.
 
 Domain-wide events, such as garbage collection and waiting for events,
