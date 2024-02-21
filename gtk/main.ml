@@ -2,6 +2,11 @@ open Eio_trace
 
 let (_ : string) = GMain.init ()
 
+let format_of_string = function
+  | ".svg" -> `Svg
+  | ".png" -> `Png
+  | x -> Fmt.failwith "Unknown format %S (should be .svg or .png)" x
+
 let load tracefile =
   let ch = open_in_bin tracefile in
   let len = in_channel_length ch in
@@ -22,7 +27,13 @@ let show ?args tracefile =
   in
   Gtk_ui.create ~title (load tracefile)
 
-let render ~output ~start_time ?duration ~format tracefile =
+let render ?output ~start_time ?duration ~format tracefile =
+  let output =
+    match output with
+    | Some x -> x
+    | None -> Filename.remove_extension tracefile ^ format
+  in
+  let format = format_of_string format in
   let l = load (tracefile) in
   let v =
     View.of_layout l
@@ -48,28 +59,32 @@ let render ~output ~start_time ?duration ~format tracefile =
     | `Svg -> ()
     | `Png -> Cairo.PNG.write surface output
   end;
-  Cairo.Surface.finish surface
-
-let format_of_string = function
-  | ".svg" -> `Svg
-  | ".png" -> `Png
-  | x -> Fmt.failwith "Unknown format %S (should be .svg or .png)" x
+  Cairo.Surface.finish surface;
+  Printf.printf "Wrote %S\n" output
 
 let () =
   match Array.to_list Sys.argv with
   | _ :: "show" :: tracefiles -> List.iter show tracefiles; GMain.main ()
   | _ :: "run" :: tracefile :: args -> show ~args tracefile; GMain.main ()
-  | [ _; "render-svg"; tracefile; format; output; start_time; duration ] ->
+  | _ :: "render-svg" :: format :: output :: start_time :: duration :: tracefiles ->
     let duration =
       match duration with
       | "" -> None
       | x -> Some (float_of_string x *. 1e9)
     in
-    render tracefile
-      ~output
-      ~start_time:(float_of_string start_time *. 1e9)
-      ?duration
-      ~format:(format_of_string format)
+    let output =
+      match output with
+      | "" -> None
+      | x -> Some x
+    in
+    let render =
+      render
+        ?output
+        ~start_time:(float_of_string start_time *. 1e9)
+        ?duration
+        ~format
+    in
+    List.iter render tracefiles
   | args ->
     Fmt.failwith "Invalid arguments (eio-trace-gtk should be run via eio-trace)@.(got %a)"
       Fmt.(Dump.list string) args

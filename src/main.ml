@@ -24,12 +24,21 @@ let tracefile =
   Arg.(value @@ opt string "trace.fxt" @@ info ["f"; "tracefile"] ~docv:"PATH" ~doc)
 
 let tracefiles =
-  let doc = "The path of the trace file(s)." in
+  let doc = "The path of the trace file(s). The default is trace.fxt." in
   Arg.(value @@ pos_all string ["trace.fxt"] @@ info [] ~docv:"PATH" ~doc)
 
 let imagefile =
-  let doc = "The path of the output image." in
-  Arg.(required @@ pos 0 (some string) None @@ info [] ~docv:"OUTPUT" ~doc)
+  let doc = "The path of the output image. The default is the input path with the new type extension." in
+  Arg.(value @@ opt (some string) None @@ info ["o"; "output"] ~docv:"OUTPUT" ~doc)
+
+let fmt =
+  let doc = "Output image file-type." in
+  let formats = Arg.enum [
+      "png", ".png";
+      "svg", ".svg";
+    ]
+  in
+  Arg.(value @@ opt (some formats) None @@ info ["T"; "format"] ~docv:"TYPE" ~doc)
 
 let freq =
   let doc = "How many times per second to check for events." in
@@ -80,29 +89,39 @@ let run ~fs ~proc_mgr freq args =
 
 let record ~fs ~proc_mgr freq tracefile args =
   Record.run ~fs ~proc_mgr ~freq ~tracefile args
+    
+let ( let* ) = Result.bind
 
-let render tracefile output start_time duration =
-  match Filename.extension output with
-  | "" -> Fmt.error "No extension on %S; can't determine format" output
-  | ".svg"
-  | ".png" as format ->
-    let start_time = Option.value start_time ~default:0.0 |> string_of_float in
-    let duration = Option.map string_of_float duration |> Option.value ~default:"" in
-    exec_gtk ["render-svg"; tracefile; format; output; start_time; duration]
-  | _ ->
-    Fmt.error "Unknown file extension in %S (should end in e.g. '.svg')" output
+let render tracefiles output fmt start_time duration =
+  let* fmt =
+    match fmt, output with
+    | None, None -> Ok ".svg"
+    | _, Some _ when List.length tracefiles > 1 -> Error "Can't use --output with multiple input files"
+    | Some x, _ -> Ok x
+    | None, Some output ->
+      match Filename.extension output with
+      | "" -> Fmt.error "No extension on %S; can't determine format" output
+      | ".svg"
+      | ".png" as f -> Ok f
+      | _ ->
+        Fmt.error "Unknown file extension in %S (should end in e.g. '.svg')" output
+  in
+  let start_time = Option.value start_time ~default:0.0 |> string_of_float in
+  let duration = Option.map string_of_float duration |> Option.value ~default:"" in
+  let output = Option.value output ~default:"" in
+  exec_gtk @@ "render-svg" :: fmt :: output :: start_time :: duration :: tracefiles
 
 let cmd env =
   let fs = Eio.Stdenv.fs env in
   let proc_mgr = Eio.Stdenv.process_mgr env in
-  let path x = Eio.Path.( / ) fs $$ x in
+  let path = Eio.Path.( / ) fs in
   Cmd.group (Cmd.info "eio-trace")
   @@ List.map (fun (name, term) -> Cmd.v (Cmd.info name) term) [
-    "record", record ~fs ~proc_mgr           $$ freq $ path tracefile $ child_args;
-    "dump",   Dump.main Format.std_formatter $$ path tracefile;
+    "record", record ~fs ~proc_mgr           $$ freq $ (path $$ tracefile) $ child_args;
+    "dump",   Dump.main Format.std_formatter $$ (List.map path $$ tracefiles);
     "run",    run ~fs ~proc_mgr              $$ freq $ child_args;
     "show",   show                           $$ tracefiles;
-    "render", render                         $$ tracefile $ imagefile $ start_time $ duration;
+    "render", render                         $$ tracefiles $ imagefile $ fmt $ start_time $ duration;
   ]
 
 let () =
