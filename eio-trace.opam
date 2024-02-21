@@ -3,8 +3,8 @@ opam-version: "2.0"
 synopsis: "Trace visualisation for Eio programs"
 maintainer: ["Thomas Leonard"]
 authors: ["Thomas Leonard"]
-homepage: "https://github.com/talex5/eio-trace"
-bug-reports: "https://github.com/talex5/eio-trace/issues"
+homepage: "https://github.com/ocaml-multicore/eio-trace"
+bug-reports: "https://github.com/ocaml-multicore/eio-trace/issues"
 depends: [
   "dune" {>= "3.11"}
   "ocaml" {>= "5.1.0"}
@@ -28,4 +28,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/talex5/eio-trace.git"
+dev-repo: "git+https://github.com/ocaml-multicore/eio-trace.git"

@@ -2,7 +2,7 @@
 (name eio-trace)
 (formatting disabled)
 (generate_opam_files true)
-(source (github talex5/eio-trace))
+(source (github ocaml-multicore/eio-trace))
 (maintainers "Thomas Leonard")
 (authors "Thomas Leonard")
 (package
