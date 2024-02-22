@@ -8,9 +8,7 @@ eio-trace can be used to record and display traces of programs using the [Eio][]
 To install eio-trace:
 
 ```
-git clone --recursive https://github.com/ocaml-multicore/eio-trace.git
-cd eio-trace
-dune build
+opam install eio-trace
 ```
 
 ### macOS
@@ -46,13 +44,13 @@ Update the version number to match the currently installed version of libffi.
 To run an Eio program and display the trace:
 
 ```
-dune exec -- eio-trace run -- myprog ...
+eio-trace run -- myprog ...
 ```
 
 You might like to start by tracing the example that comes with eio-trace:
 
 ```
-dune build && dune exec -- eio-trace run -- ./_build/default/examples/net/main.exe
+dune build && eio-trace run -- ./_build/default/examples/net/main.exe
 ```
 
 <p align='center'>
@@ -64,7 +62,7 @@ Scrolling with the mouse or touchpad will zoom in or out of the diagram.
 To record a trace:
 
 ```
-dune exec -- eio-trace record -f trace.fxt -- myprog ...
+eio-trace record -f trace.fxt -- myprog ...
 ```
 
 This runs `myprog ...` with the `OCAML_RUNTIME_EVENTS_START` environment variable set, which causes it to record events to a ring buffer.
@@ -75,13 +73,13 @@ The trace can be viewed using generic tools such as [Perfetto][], but eio-trace'
 as it takes advantage of Eio's structured concurrency:
 
 ```
-dune exec -- eio-trace show trace.fxt
+eio-trace show trace.fxt
 ```
 
 To convert a trace to SVG format:
 
 ```
-dune exec -- eio-trace render trace.fxt
+eio-trace render trace.fxt
 ```
 
 You can also use `--format=png` for PNG output.
