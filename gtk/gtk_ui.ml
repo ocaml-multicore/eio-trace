@@ -3,7 +3,7 @@ open Eio_trace
 let ( ==> ) signal callback =
   ignore (signal ~callback : GtkSignal.id)
 
-let create ~title layout =
+let create ~title tracefile =
   let window = GWindow.window () in
   window#set_title title;
   window#event#connect#delete ==> (fun _ -> GMain.quit (); true);
@@ -13,7 +13,10 @@ let create ~title layout =
   let area = GMisc.drawing_area ~packing:(table#attach ~left:0 ~top:0 ~expand:`BOTH ~fill:`BOTH) () in
   let _hscroll = GRange.scrollbar `HORIZONTAL ~adjustment:hadjustment ~packing:(table#attach ~left:0 ~top:1 ~expand:`X ~fill:`BOTH) () in
   let _vscroll = GRange.scrollbar `VERTICAL ~adjustment:vadjustment ~packing:(table#attach ~left:1 ~top:0 ~expand:`Y ~fill:`BOTH) () in
-  let v = View.of_layout layout ~width:1000. ~height:1000. in
+  let v =
+    let layout = Layout.load tracefile in
+    View.of_layout layout ~width:1000. ~height:1000.
+  in
   let set_scollbars () =
     let (xlo, xhi, xsize, xvalue), (ylo, yhi, ysize, yvalue) = View.scroll_bounds v in
     hadjustment#set_bounds ~lower:xlo ~upper:xhi ~page_size:xsize ();
@@ -45,6 +48,18 @@ let create ~title layout =
       true
     );
   area#misc#set_app_paintable true;
+
+  window#event#connect#key_press ==> (fun ev ->
+      let keyval = GdkEvent.Key.keyval ev in
+      if keyval = GdkKeysyms._F5 then (
+        let layout = Layout.load tracefile in
+        View.set_layout v layout;
+        set_scollbars ();
+        redraw ();
+        true
+      ) else false
+    );
+
   area#event#add [`SMOOTH_SCROLL; `BUTTON1_MOTION; `BUTTON_PRESS];
   area#event#connect#scroll ==> (fun ev ->
       let x = GdkEvent.Scroll.x ev in

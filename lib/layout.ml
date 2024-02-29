@@ -242,3 +242,11 @@ let of_trace (trace : Trace.t) =
 let start_time t = t.start_time
 
 let ring t id = Trace.Rings.find id t.rings
+
+let load tracefile =
+  let ch = open_in_bin tracefile in
+  let len = in_channel_length ch in
+  let data = really_input_string ch len in
+  close_in ch;
+  let trace = Trace.create data in
+  of_trace trace

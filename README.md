@@ -59,6 +59,8 @@ dune build && eio-trace run -- ./_build/default/examples/net/main.exe
 
 Scrolling with the mouse or touchpad will zoom in or out of the diagram.
 
+If the program is still running when the window appears, you can press F5 to update to the latest events.
+
 To record a trace:
 
 ```

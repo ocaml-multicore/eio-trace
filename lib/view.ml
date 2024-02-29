@@ -1,5 +1,5 @@
 type t = {
-  layout : Layout.t;
+  mutable layout : Layout.t;
   mutable width : float;                (* Canvas width in pixels *)
   mutable height : float;
   mutable start_time : float;           (* Time after layout start (ns) *)
@@ -78,3 +78,6 @@ let of_layout layout ~width ~height =
   let t = { layout; width; height; start_time = 0.; scroll_y = -. v_margin; pixels_per_ns = 0.0; zoom = -3.0 } in
   zoom t 0.0;
   t
+
+let set_layout t layout =
+  t.layout <- layout
