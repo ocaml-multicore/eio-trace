@@ -7,14 +7,6 @@ let format_of_string = function
   | ".png" -> `Png
   | x -> Fmt.failwith "Unknown format %S (should be .svg or .png)" x
 
-let load tracefile =
-  let ch = open_in_bin tracefile in
-  let len = in_channel_length ch in
-  let data = really_input_string ch len in
-  close_in ch;
-  let trace = Trace.create data in
-  Layout.of_trace trace
-
 let show ?args tracefile =
   let title =
     match args with
@@ -25,7 +17,7 @@ let show ?args tracefile =
     | Some args ->
       String.concat " " args
   in
-  Gtk_ui.create ~title (load tracefile)
+  Gtk_ui.create ~title tracefile
 
 let render ?output ~start_time ?duration ~format tracefile =
   let output =
@@ -34,7 +26,7 @@ let render ?output ~start_time ?duration ~format tracefile =
     | None -> Filename.remove_extension tracefile ^ format
   in
   let format = format_of_string format in
-  let l = load (tracefile) in
+  let l = Layout.load (tracefile) in
   let v =
     View.of_layout l
       ~width:1280.
