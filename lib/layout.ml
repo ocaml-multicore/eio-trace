@@ -145,14 +145,12 @@ let rec layout_item ~duration (i : item) =
   let itv = Itv.create intervals in
   let height = ref i.height in
   intervals |> List.to_seq |> Seq.drop n_ccs |> Seq.iter (fun (interval : _ Itv.interval) ->
-      let y = ref 1 in
-      let adjust other =
-        y := max !y (other.y + other.height);
-      in
+      let space = Space.create 1 in
+      let adjust other = Space.mark_range space other.y (other.y + other.height) in
       Itv.iter_overlaps adjust interval.start interval.stop itv;
       let f = interval.Itv.value in
       layout_item ~duration f;
-      f.y <- !y;
+      f.y <- Space.first_free space f.height;
       height := max !height (f.y + f.height);
     );
   i.height <- !height

@@ -1,4 +1,5 @@
 module Itv = Eio_trace.Itv
+module Space = Eio_trace.Space
 
 let span = Crowbar.(map [uint8; uint8]) (fun start len -> (float start, float (start + len)))
 
@@ -24,5 +25,15 @@ let test_ivt spans (start, stop) =
       )
     )
 
+let test_space start used height =
+  let s = Space.create start in
+  List.iter (Space.mark s) used;
+  let free = Space.first_free s height in
+  for i = free to free + height - 1 do
+    if List.mem i used then
+      Crowbar.failf "Row %d is used, but was returned as free (%d+%d)!" i free height
+  done
+
 let () =
-  Crowbar.(add_test ~name:"ivt" [list span; span] test_ivt)
+  Crowbar.(add_test ~name:"ivt" [list span; span] test_ivt);
+  Crowbar.(add_test ~name:"space" [int8; list int8; uint8] test_space)
