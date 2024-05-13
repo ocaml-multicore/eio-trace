@@ -104,57 +104,57 @@ let as_string = function
   | `String s -> s
   | _ -> failwith "Not a string"
 
-let layout ~duration (ring : Ring.t) =
+let rec layout_item ~duration ~y (i : item) =
+  if debug_layout then Fmt.epr "%d is at %d@." i.id y;
+  i.y <- y;
+  i.height <- 1;
+  i.end_cc_label <- None;
+  let intervals = ref [] in
+  i.events |> Array.iter (fun (ts, e) ->
+      match e with
+      | Log _ | Error _ ->
+        if i.end_cc_label = None then (
+          i.end_cc_label <- Some ts;
+        )
+      | Add_fiber _ -> ()
+      | Create_cc (_, child) ->
+        if debug_layout then Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
+        if i.end_cc_label = None then (
+          i.end_cc_label <- Some ts;
+        );
+        layout_item ~duration ~y child;
+        i.height <- max i.height child.height;
+        let stop = Option.value child.end_time ~default:duration in
+        intervals := { Itv.value = child; start = ts; stop } :: !intervals;
+    );
+  if i.end_cc_label = None then i.end_cc_label <- i.end_time;
+  let start_fibers = List.length !intervals in
+  i.events |> Array.iter (fun (ts, e) ->
+      match e with
+      | Log _ | Error _ | Create_cc _ -> ()
+      | Add_fiber { parent; child } ->
+        if debug_layout then Fmt.epr "%d gets fiber %d, created by %d@." i.id child.id parent;
+        let stop = Option.value child.end_time ~default:duration in
+        intervals := { Itv.value = child; start = ts; stop } :: !intervals;
+    );
+  let intervals = List.rev !intervals in
+  let itv = Itv.create intervals in
+  let height = ref i.height in
+  intervals |> List.to_seq |> Seq.drop start_fibers |> Seq.iter (fun (interval : _ Itv.interval) ->
+      let y = ref (i.y + 1) in
+      let adjust other =
+        y := max !y (other.y + other.height);
+      in
+      Itv.iter_overlaps adjust interval.start interval.stop itv;
+      let f = interval.Itv.value in
+      layout_item ~duration ~y:!y f;
+      height := max !height (f.y - i.y + f.height);
+    );
+  i.height <- !height;
+  if debug_layout then Fmt.epr "%d is at %d+%d@." i.id y i.height
+
+let layout_ring ~duration (ring : Ring.t) =
   let max_y = ref 1 in
-  let rec visit ~y (i : item) =
-    if debug_layout then Fmt.epr "%d is at %d@." i.id y;
-    i.y <- y;
-    i.height <- 1;
-    i.end_cc_label <- None;
-    let intervals = ref [] in
-    i.events |> Array.iter (fun (ts, e) ->
-        match e with
-        | Log _ | Error _ ->
-          if i.end_cc_label = None then (
-              i.end_cc_label <- Some ts;
-            )
-        | Add_fiber _ -> ()
-        | Create_cc (_, child) ->
-          if debug_layout then Fmt.epr "%d creates cc %d (%a)@." i.id child.id Fmt.(option string) child.name;
-          if i.end_cc_label = None then (
-              i.end_cc_label <- Some ts;
-            );
-          visit ~y child;
-          i.height <- max i.height child.height;
-          let stop = Option.value child.end_time ~default:duration in
-          intervals := { Itv.value = child; start = ts; stop } :: !intervals;
-      );
-    if i.end_cc_label = None then i.end_cc_label <- i.end_time;
-    let start_fibers = List.length !intervals in
-    i.events |> Array.iter (fun (ts, e) ->
-        match e with
-        | Log _ | Error _ | Create_cc _ -> ()
-        | Add_fiber { parent; child } ->
-          if debug_layout then Fmt.epr "%d gets fiber %d, created by %d@." i.id child.id parent;
-          let stop = Option.value child.end_time ~default:duration in
-          intervals := { Itv.value = child; start = ts; stop } :: !intervals;
-      );
-    let intervals = List.rev !intervals in
-    let itv = Itv.create intervals in
-    let height = ref i.height in
-    intervals |> List.to_seq |> Seq.drop start_fibers |> Seq.iter (fun (interval : _ Itv.interval) ->
-        let y = ref (i.y + 1) in
-        let adjust other =
-          y := max !y (other.y + other.height);
-        in
-        Itv.iter_overlaps adjust interval.start interval.stop itv;
-        let f = interval.Itv.value in
-        visit ~y:!y f;
-        height := max !height (f.y - i.y + f.height);
-      );
-    i.height <- !height;
-    if debug_layout then Fmt.epr "%d is at %d+%d@." i.id y i.height;
-  in
   let visit_domain root =
     root.Ring.cc |> Option.iter @@ fun (_ts, (i : item)) ->
     i.y <- ring.y + 1;
@@ -164,7 +164,7 @@ let layout ~duration (ring : Ring.t) =
         match e with
         | Log _ | Error _ | Create_cc _ -> ()
         | Add_fiber { parent = _; child } ->
-          visit ~y:(ring.y + i.height) child;
+          layout_item ~duration ~y:(ring.y + i.height) child;
           i.height <- child.y - ring.y + child.height;
           if i.end_cc_label = None then (
             i.end_cc_label <- child.end_cc_label;
@@ -233,7 +233,7 @@ let of_trace (trace : Trace.t) =
   let y = ref 0 in
   rings |> Trace.Rings.iter (fun _ (ring : Ring.t) ->
       ring.y <- !y;
-      layout ring ~duration;
+      layout_ring ring ~duration;
       y := !y + ring.height;
     );
   let height = !y in
