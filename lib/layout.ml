@@ -153,7 +153,6 @@ let layout ~duration (ring : Ring.t) =
         height := max !height (f.y - i.y + f.height);
       );
     i.height <- !height;
-    max_y := max !max_y i.y;
     if debug_layout then Fmt.epr "%d is at %d+%d@." i.id y i.height;
   in
   let visit_domain root =
@@ -171,6 +170,7 @@ let layout ~duration (ring : Ring.t) =
             i.end_cc_label <- child.end_cc_label;
           );
       );
+    max_y := max !max_y (i.y + i.height - 1);
   in
   List.iter visit_domain ring.roots;
   ring.height <- (!max_y + 1) - ring.y
