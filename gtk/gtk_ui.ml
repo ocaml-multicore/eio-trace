@@ -7,12 +7,13 @@ let create ~title tracefile =
   let window = GWindow.window () in
   window#set_title title;
   window#event#connect#delete ==> (fun _ -> GMain.quit (); true);
-  let table = GPack.table ~rows:2 ~columns:2 ~homogeneous:false ~packing:window#add () in
+  let table = GPack.table ~rows:3 ~columns:2 ~homogeneous:false ~packing:window#add () in
   let hadjustment = GData.adjustment () in
   let vadjustment = GData.adjustment () in
   let area = GMisc.drawing_area ~packing:(table#attach ~left:0 ~top:0 ~expand:`BOTH ~fill:`BOTH) () in
   let _hscroll = GRange.scrollbar `HORIZONTAL ~adjustment:hadjustment ~packing:(table#attach ~left:0 ~top:1 ~expand:`X ~fill:`BOTH) () in
   let _vscroll = GRange.scrollbar `VERTICAL ~adjustment:vadjustment ~packing:(table#attach ~left:1 ~top:0 ~expand:`Y ~fill:`BOTH) () in
+  let minibuffer = Minibuffer.create ~packing:(table#attach ~left:0 ~top:2 ~right:2 ~fill:`BOTH) () in
   let v =
     let layout = Layout.load tracefile in
     View.of_layout layout ~width:1000. ~height:1000.
@@ -49,6 +50,52 @@ let create ~title tracefile =
     );
   area#misc#set_app_paintable true;
 
+  let show_start () =
+    let current = View.time_of_x v 0. /. 1e9 in 
+    Minibuffer.show minibuffer
+      ~label:"Viewport start: "
+      ~value:(Time.to_string current)
+      (fun s ->
+         match Time.of_string s with
+         | Ok time ->
+           set_start_time (time *. 1e9);
+           redraw ();
+           Minibuffer.hide minibuffer
+         | Error message ->
+           let box =
+             GWindow.message_dialog ()
+               ~message
+               ~parent:window
+               ~buttons:GWindow.Buttons.close
+           in
+           box#connect#response ==> (fun _ -> box#destroy ());
+           box#show ()
+      )
+  in
+
+  let show_duration () =
+    let current = View.get_duration v /. 1e9 in
+    Minibuffer.show minibuffer
+      ~label:"Viewport duration: "
+      ~value:(Time.to_string current)
+      (fun s ->
+         match Time.of_string s with
+         | Ok d ->
+           View.set_duration v (d *. 1e9);
+           redraw ();
+           Minibuffer.hide minibuffer
+         | Error message ->
+           let box =
+             GWindow.message_dialog ()
+               ~message
+               ~parent:window
+               ~buttons:GWindow.Buttons.close
+           in
+           box#connect#response ==> (fun _ -> box#destroy ());
+           box#show ()
+      )
+  in
+
   window#event#connect#key_press ==> (fun ev ->
       let keyval = GdkEvent.Key.keyval ev in
       if keyval = GdkKeysyms._F5 then (
@@ -57,7 +104,20 @@ let create ~title tracefile =
         set_scollbars ();
         redraw ();
         true
-      ) else false
+      ) else if Minibuffer.is_open minibuffer then (
+        if keyval = GdkKeysyms._Escape then (
+          Minibuffer.hide minibuffer;
+          true
+        ) else false
+      ) else (
+        if keyval = GdkKeysyms._s then (
+          show_start ();
+          true
+        ) else if keyval = GdkKeysyms._d then (
+          show_duration ();
+          true
+        ) else false
+      )
     );
 
   area#event#add [`SMOOTH_SCROLL; `BUTTON1_MOTION; `BUTTON_PRESS];
@@ -113,7 +173,7 @@ let create ~title tracefile =
       set_scroll_y vadjustment#value;
       redraw ();
     );
-  
+
   let height =
     int_of_float @@ min
       (float (Gdk.Screen.height ()) *. 0.8)
