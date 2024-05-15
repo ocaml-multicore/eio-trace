@@ -113,6 +113,14 @@ In the above trace, the upper domain performed GC while suspended
 (the dark "minor" region in the top right, inside the "suspend-domain" region).
 This is possible because each domain has a "backup" thread that handles GC while the domain is suspended.
 
+## Controls
+
+- F5 : reload the trace file
+- s : start-time (elapsed time at left edge of window since trace start)
+- d : duration (duration to show in the currently visible area of the window)
+
+`d` is useful for getting two windows to use the same scale, so that they can be compared easily.
+
 ## Limitations
 
 - OCaml 5.1 can [deadlock when tracing multiple domains](https://github.com/ocaml/ocaml/issues/12897). This should be fixed in OCaml 5.2.

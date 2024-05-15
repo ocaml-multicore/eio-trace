@@ -42,11 +42,17 @@ let zoom_to t z =
 let zoom t delta =
   zoom_to t (t.zoom +. delta)
 
+let set_duration t duration =
+  let ppns = (t.width -. 2. *. h_margin) /. duration in
+  zoom_to t (log ppns /. log 10.)
+
+let get_duration t =
+  (t.width -. 2. *. h_margin) /. t.pixels_per_ns
+
 let zoom_to_fit ?(start_time=0.0) ?duration t =
   let start_time = min start_time t.layout.duration in
   let duration = Option.value duration ~default:(t.layout.duration -. start_time) in
-  let ppns = (t.width -. 2. *. h_margin) /. duration in
-  zoom_to t (log ppns /. log 10.);
+  set_duration t duration;
   t.start_time <- start_time -. timespan_of_width t h_margin
 
 let max_x_scroll t =

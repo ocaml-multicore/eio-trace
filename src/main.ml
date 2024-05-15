@@ -4,20 +4,7 @@ let ( $ ) = Term.app
 let ( $$ ) f x = Term.const f $ x
 
 let time =
-  let parse s =
-    Scanf.sscanf_opt s "%f %s" @@ fun v units ->
-    match units with
-    | ""
-    | "s" -> Ok v
-    | "m" -> Ok (v *. 60.)
-    | "ms" -> Ok (v /. 1e3)
-    | "us" -> Ok (v /. 1e6)
-    | "ns" -> Ok (v /. 1e9)
-    | x -> Fmt.error "Unknown time unit %S" x
-  in
-  let parse s = Option.value (parse s) ~default:(Fmt.error "Invalid duration %S" s) in
-  let print f x = Fmt.pf f "%fns" x in
-  Arg.conv' (parse, print)
+  Arg.conv' (Eio_trace.Time.of_string, Eio_trace.Time.pp)
 
 let tracefile =
   let doc = "The path of the trace file." in
