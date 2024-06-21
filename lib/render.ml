@@ -239,11 +239,26 @@ module Make (C : CANVAS) = struct
         let w = x1 -. x0 in
         begin match stack with
           | [] -> ()
-          | op :: p ->
-            let g = 1.0 -. min 1.0 (0.1 *. float (List.length stack)) in
+          | Suspend op :: p ->
+            begin match layer with
+              | `Bg ->
+                let g = 0.9 in
+                C.set_source_rgb cr ~r:g ~g:g ~b:(g /. 2.);
+                C.rectangle cr ~x:x0 ~y ~w ~h;
+                C.fill cr
+              | `Fg ->
+                if p == !prev_stack then (
+                  let clip_area = (w -. 0.2, v.height) in
+                  C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+                  C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
+                    ~clip_area
+                )
+            end
+          | Gc op :: p ->
+            let g = max 0.1 (0.1 *. float (List.length stack)) in
             match layer with
             | `Bg ->
-              C.set_source_rgb cr ~r:g ~g:g ~b:(g /. 2.);
+              C.set_source_rgb cr ~r:1.0 ~g:g ~b:(g /. 2.);
               C.rectangle cr ~x:x0 ~y ~w ~h;
               C.fill cr
             | `Fg ->

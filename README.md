@@ -101,8 +101,9 @@ Switches can be named using `Switch.run ~name`. Unnamed switches are shown as "s
 A context being cancelled is indicated by a vertical red line.
 
 Domain-wide events, such as garbage collection and waiting for events,
-are shown as yellow regions behind all the fibers in the domain.
-Nested events get progressively darker yellow.
+are shown as coloured regions behind all the fibers in the domain.
+GC periods are shown in shades of red when running, or yellow when waiting.
+Yellow is also used when the domain is waiting for events outside of GC.
 When there are multiple domains, they are shown stacked vertically:
 
 <p align='center'>
@@ -110,8 +111,18 @@ When there are multiple domains, they are shown stacked vertically:
 </p>
 
 In the above trace, the upper domain performed GC while suspended
-(the dark "minor" region in the top right, inside the "suspend-domain" region).
+(the red "minor" region in the top right, inside the "suspend-domain" region).
 This is possible because each domain has a "backup" thread that handles GC while the domain is suspended.
+
+For minor GCs:
+1. The domain initiating the GC enters a "stw_leader" (stop-the-world) phase and waits for the other domains to stop.
+2. One by one, the other domains stop and enter "stw_api_barrier" until all domains have stopped.
+3. All domains perform a minor GC, clearing their minor heaps.
+4. They then enter a "minor_leave_barrier" phase, waiting until all domains have finished.
+5. Each domain returns to running application code (including GC finalizers).
+
+Phases that usually involve sleeping are shown with a yellow background, but sometimes they do perform work
+(the trace events don't give us enough information to know in all cases).
 
 ## Controls
 
@@ -123,7 +134,7 @@ This is possible because each domain has a "backup" thread that handles GC while
 
 ## Limitations
 
-- OCaml 5.1 can [deadlock when tracing multiple domains](https://github.com/ocaml/ocaml/issues/12897). This should be fixed in OCaml 5.2.
+- OCaml 5.1 can [deadlock when tracing multiple domains](https://github.com/ocaml/ocaml/issues/12897). This was fixed in OCaml 5.2.
 - Events are reported per-domain, but not per-systhread.
   Events generated in systhreads will get mixed up and cannot be shown correctly.
   They will either appear attached to whatever fiber happens to be running, or shown as domain-level events.
