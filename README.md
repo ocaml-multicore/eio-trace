@@ -126,6 +126,7 @@ Phases that usually involve sleeping are shown with a yellow background, but som
 
 ## Controls
 
+- Right click for a menu
 - F5 : reload the trace file
 - s : start-time (elapsed time at left edge of window since trace start)
 - d : duration (duration to show in the currently visible area of the window)
