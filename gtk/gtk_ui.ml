@@ -3,8 +3,24 @@ open Eio_trace
 let ( ==> ) signal callback =
   ignore (signal ~callback : GtkSignal.id)
 
+let ui_xml = {|
+<ui>
+  <popup name='PopupMenu'>
+    <menuitem action='viewport-set-start' />
+    <menuitem action='viewport-set-duration' />
+  </popup>
+</ui>
+|}
+
 let create ~title tracefile =
+  let actions = GAction.action_group ~name:"main" () in
+  let ui = GAction.ui_manager () in
+  ui#insert_action_group actions 0;
+  let _id : GAction.ui_id = ui#add_ui_from_string ui_xml; in
+
   let window = GWindow.window () in
+  window#add_accel_group ui#get_accel_group;
+
   window#set_title title;
   window#event#connect#delete ==> (fun _ -> GMain.quit (); true);
   let table = GPack.table ~rows:3 ~columns:2 ~homogeneous:false ~packing:window#add () in
@@ -96,6 +112,14 @@ let create ~title tracefile =
       )
   in
 
+  GAction.add_action "viewport-set-start" actions
+    ~label:"Set start time..."
+    ~callback:(fun _a -> show_start ());
+
+  GAction.add_action "viewport-set-duration" actions
+    ~label:"Set duration..."
+    ~callback:(fun _a -> show_duration ());
+
   window#event#connect#key_press ==> (fun ev ->
       let keyval = GdkEvent.Key.keyval ev in
       if keyval = GdkKeysyms._F5 then (
@@ -140,13 +164,20 @@ let create ~title tracefile =
       | _ -> false
     );
 
+  let menu = ui#get_widget "/PopupMenu" in
+  let menu = new GMenu.menu (Gobject.try_cast menu#as_widget "GtkMenu") in
+  GtkMenuProps.Menu.attach_to_widget menu#as_menu window#as_widget;
+
   let drag_start = ref None in
   area#event#connect#button_press ==> (fun ev ->
       match GdkEvent.get_type ev, GdkEvent.Button.button ev with
       | `BUTTON_PRESS, 1 ->
         let start_t = View.time_of_x v (GdkEvent.Button.x ev) in
         drag_start := Some (start_t, v.scroll_y +. GdkEvent.Button.y ev);
-        true;
+        true
+      | `BUTTON_PRESS, (3 as button) ->
+        menu#popup ~button ~time:(GdkEvent.Button.time ev);
+        true
       | _ -> false
     );
 
