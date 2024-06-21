@@ -38,9 +38,13 @@ module Ring = struct
     mutable cc : (timestamp * item) option;
   }
 
+  type event =
+    | Suspend of string
+    | Gc of string
+
   type t = {
     mutable current_fiber : int option;
-    mutable events : (timestamp * string list) list;
+    mutable events : (timestamp * event list) list;
     mutable roots : root list;
   }
 
@@ -161,7 +165,7 @@ let process_event t e =
   | "eio.span", name, Duration_begin ->
     begin match fiber_of_thread t thread with
       | Some fiber -> add_activation fiber timestamp (`Enter_span name)
-      | None -> ring_of_thread t thread |> Option.iter (fun ring -> Ring.push ring timestamp name)
+      | None -> ring_of_thread t thread |> Option.iter (fun ring -> Ring.push ring timestamp (Suspend name))
     end
   | "eio.span", _name, Duration_end ->
     begin match fiber_of_thread t thread with
@@ -201,7 +205,16 @@ let process_event t e =
   | "eio", ("suspend-domain" as phase), Duration_begin
   | "gc", phase, Duration_begin ->
     let r = ring_of_thread t thread |> Option.get in
-    Ring.push r timestamp phase
+    Ring.push r timestamp (
+      match phase with
+      | "suspend-domain"
+      | "major_gc_stw"
+      | "major_gc_phase_change"
+      | "stw_api_barrier"
+      | "minor_leave_barrier"
+      | "stw_leader" -> Ring.Suspend phase
+      | _ -> Ring.Gc phase
+    )
   | "eio", "suspend-domain", Duration_end
   | "gc", _, Duration_end ->
     let r = ring_of_thread t thread |> Option.get in

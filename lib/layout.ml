@@ -69,7 +69,7 @@ module Ring = struct
   }
 
   type t = {
-    events : (timestamp * string list) array;
+    events : (timestamp * Trace.Ring.event list) array;
     mutable y : int;
     mutable height : int;
     mutable roots : root list;
