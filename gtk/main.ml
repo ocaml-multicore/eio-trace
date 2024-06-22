@@ -2,10 +2,9 @@ open Eio_trace
 
 let (_ : string) = GMain.init ()
 
-let format_of_string = function
-  | ".svg" -> `Svg
-  | ".png" -> `Png
-  | x -> Fmt.failwith "Unknown format %S (should be .svg or .png)" x
+let or_die = function
+  | Ok x -> x
+  | Error msg -> failwith msg
 
 let show ?args tracefile =
   let title =
@@ -25,7 +24,7 @@ let render ?output ~start_time ?duration ~format tracefile =
     | Some x -> x
     | None -> Filename.remove_extension tracefile ^ format
   in
-  let format = format_of_string format in
+  let format = Save.format_of_string format |> or_die in
   let l = Layout.load (tracefile) in
   let v =
     View.of_layout l
@@ -33,25 +32,7 @@ let render ?output ~start_time ?duration ~format tracefile =
       ~height:((float l.height +. 0.5) *. View.pixels_per_row +. 2. *. View.v_margin)
   in
   View.zoom_to_fit v ~start_time ?duration;
-  let create =
-    match format with
-    | `Svg -> Cairo.SVG.create output
-    | `Png -> fun ~w ~h -> Cairo.Image.create RGB24 ~w:(int_of_float w) ~h:(int_of_float h)
-  in
-  let surface =
-    create
-    ~w:v.width
-    ~h:v.height
-  in
-  let cr = Cairo.create surface in
-  Cairo.rectangle cr 0.0 0.0 ~w:v.width ~h:v.height;
-  Cairo.clip cr;
-  Render_cairo.render v cr;
-  begin match format with
-    | `Svg -> ()
-    | `Png -> Cairo.PNG.write surface output
-  end;
-  Cairo.Surface.finish surface;
+  Save.export_image v format output |> or_die;
   Printf.printf "Wrote %S\n" output
 
 let () =

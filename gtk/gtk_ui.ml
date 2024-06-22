@@ -3,9 +3,12 @@ open Eio_trace
 let ( ==> ) signal callback =
   ignore (signal ~callback : GtkSignal.id)
 
+let (let*) = Result.bind
+
 let ui_xml = {|
 <ui>
   <popup name='PopupMenu'>
+    <menuitem action='export-image' />
     <menuitem action='viewport-set-start' />
     <menuitem action='viewport-set-duration' />
   </popup>
@@ -13,10 +16,11 @@ let ui_xml = {|
 |}
 
 let create ~title tracefile =
+  let last_export = ref None in
   let actions = GAction.action_group ~name:"main" () in
   let ui = GAction.ui_manager () in
   ui#insert_action_group actions 0;
-  let _id : GAction.ui_id = ui#add_ui_from_string ui_xml; in
+  let _id : GAction.ui_id = ui#add_ui_from_string ui_xml in
 
   let window = GWindow.window () in
   window#add_accel_group ui#get_accel_group;
@@ -112,6 +116,50 @@ let create ~title tracefile =
       )
   in
 
+  let alert message =
+    let dialog = GWindow.message_dialog ~title:"Error" ~buttons:GWindow.Buttons.ok ~message () in
+    dialog#show ();
+    match dialog#run () with
+    | `DELETE_EVENT | `OK -> dialog#destroy ()
+  in
+
+  let save_image () =
+    let dialog = GWindow.file_chooser_dialog ~title:"Export image" ~action:`SAVE ~parent:window () in
+    begin match !last_export with
+      | None ->
+        let dir = Filename.dirname tracefile in
+        ignore (dialog#set_current_folder dir : bool);
+        dialog#set_current_name ((Filename.basename tracefile |> Filename.remove_extension) ^ ".svg")
+      | Some path ->
+        ignore (dialog#set_filename path : bool)
+    end;
+    dialog#add_select_button_stock `SAVE `OK;
+    dialog#set_default_response `OK;
+    dialog#add_button_stock `CANCEL `CANCEL;
+    dialog#connect#response ==> (function
+        | `DELETE_EVENT | `CANCEL ->
+          dialog#destroy ()
+        | `OK ->
+          match
+            match dialog#get_filenames with
+            | [path] ->
+              let* fmt = Save.format_of_string (Filename.extension path) in
+              last_export := Some path;
+              Save.export_image v fmt path
+            | _ -> Error "Must select one path"
+          with
+          | Ok () -> dialog#destroy ()
+          | Error msg -> alert msg
+      );
+    dialog#show ();
+  in
+
+  GAction.add_action "export-image" actions
+    ~label:"Export image as..."
+    ~accel:"<control>e"
+    ~stock:`SAVE_AS
+    ~callback:(fun _a -> save_image ());
+
   GAction.add_action "viewport-set-start" actions
     ~label:"Set start time..."
     ~callback:(fun _a -> show_start ());
@@ -134,7 +182,8 @@ let create ~title tracefile =
           true
         ) else false
       ) else (
-        if keyval = GdkKeysyms._s then (
+        if GdkEvent.Key.state ev <> [] then false
+        else if keyval = GdkKeysyms._s then (
           show_start ();
           true
         ) else if keyval = GdkKeysyms._d then (
