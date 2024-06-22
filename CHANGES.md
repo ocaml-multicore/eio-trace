@@ -1,3 +1,27 @@
+## v0.2
+
+- Fix staircasing in layout (@talex5 #28).  
+  Instead of placing a new fiber below all overlapping fibers, place it in the first large-enough gap.
+
+- Allow setting viewport values explicitly (@talex5 #29).  
+  Press `s` to see or edit the start time.
+  Press `d` to see or edit the duration time.
+  Useful to find values for command-line rendering or to ensure that images have the same scale for comparison.
+
+- Add a popup menu (@talex5 #31).
+
+- Add Reload feature (@talex5 #27, #33).  
+  With `eio-trace run` the window opens after 1 second. Press F5 to get further updates.
+
+- Add Export image to GTK UI (@talex5 #32).
+
+- Show GC running in red (@talex5 #30).  
+  This makes it easier to see the difference between domains actively running GC vs waiting for other domains to be ready.
+
+- Update README now that eio-trace is released (@talex5 #26).
+
+- Explain what to do about lost events (@talex5 #34).
+
 ## v0.1
 
 - Initial release.
