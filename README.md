@@ -133,13 +133,29 @@ Phases that usually involve sleeping are shown with a yellow background, but som
 
 `d` is useful for getting two windows to use the same scale, so that they can be compared easily.
 
+## Missed events
+
+If eio-trace does not read a domain's ring buffer quickly enough then some events will be lost
+and you will see something like this:
+
+```
++Warning: ring 0 lost 94001 events
+```
+
+This will likely result in misleading traces.
+There are several ways to fix this:
+
+- Use e.g. `eio-trace -F 1000` to make eio-trace read the ring more frequently.
+- Set e.g. `OCAMLRUNPARAM=e=20` to increase the size of the rings.
+- If events are being lost at startup, consider adding a short sleep to the start of your program
+  so that eio-trace has time to attach it it.
+
 ## Limitations
 
 - OCaml 5.1 can [deadlock when tracing multiple domains](https://github.com/ocaml/ocaml/issues/12897). This was fixed in OCaml 5.2.
 - Events are reported per-domain, but not per-systhread.
   Events generated in systhreads will get mixed up and cannot be shown correctly.
   They will either appear attached to whatever fiber happens to be running, or shown as domain-level events.
-- If events are produced too fast, some will be lost. eio-trace is unlikely to handle this well.
 - The rendering is not optimised yet and may become quite slow on larger traces.
 
 [Eio]: https://github.com/ocaml-multicore/eio
