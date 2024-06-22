@@ -9,6 +9,7 @@ let ui_xml = {|
 <ui>
   <popup name='PopupMenu'>
     <menuitem action='export-image' />
+    <menuitem action='reload'/>
     <menuitem action='viewport-set-start' />
     <menuitem action='viewport-set-duration' />
   </popup>
@@ -168,15 +169,20 @@ let create ~title tracefile =
     ~label:"Set duration..."
     ~callback:(fun _a -> show_duration ());
 
-  window#event#connect#key_press ==> (fun ev ->
-      let keyval = GdkEvent.Key.keyval ev in
-      if keyval = GdkKeysyms._F5 then (
+  GAction.add_action "reload" actions
+    ~label:"Reload"
+    ~accel:"F5"
+    ~stock:`REFRESH
+    ~callback:(fun _a ->
         let layout = Layout.load tracefile in
         View.set_layout v layout;
         set_scollbars ();
-        redraw ();
-        true
-      ) else if Minibuffer.is_open minibuffer then (
+        redraw ()
+      );
+
+  window#event#connect#key_press ==> (fun ev ->
+      let keyval = GdkEvent.Key.keyval ev in
+      if Minibuffer.is_open minibuffer then (
         if keyval = GdkKeysyms._Escape then (
           Minibuffer.hide minibuffer;
           true
