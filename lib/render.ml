@@ -1,3 +1,18 @@
+let rec find_first_aux arr test low high =
+  if low = high then high
+  else (
+    let mid = (low + high) / 2 in
+    let diff = test mid in
+    if diff >= 0. then find_first_aux arr test low mid
+    else find_first_aux arr test (mid + 1) high
+  )
+
+(* Binary search. Return the index of the first element where [test i] is true.
+   If [test] isn't true for any element, returns the length of the array.
+   Assumes that if [test i] then it's true for all later entries. *)
+let find_first ?(start = 0) arr test =
+  find_first_aux arr test start (Array.length arr)
+
 module type CANVAS = sig
   type context
 
@@ -217,12 +232,16 @@ module Make (C : CANVAS) = struct
 
   let iter_gc_spans v fn ring =
     let arr = ring.Layout.Ring.events in
-    (* todo: binary search *)
-    for i = 0 to Array.length arr - 1 do
+    let time i = fst arr.(i) in
+    let start = max 0 (find_first arr (fun i -> time i -. v.View.start_time) - 1) in
+    let stop_time = View.time_of_x v v.width in
+    let stop = find_first arr (fun i -> time i -. stop_time) ~start in
+    for i = start to min stop (Array.length arr - 1) do
       let time, e = arr.(i) in
       fn (time, e)
     done;
-    fn (v.View.layout.duration, [])
+    if stop = Array.length arr then
+      fn (v.View.layout.duration, [])
 
   let render_gc_events v cr (ring : Layout.Ring.t) layer =
     let y = y_of_row v ring.y in
