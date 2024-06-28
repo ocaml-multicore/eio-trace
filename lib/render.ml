@@ -264,50 +264,52 @@ module Make (C : CANVAS) = struct
   let render_gc_events v cr (ring : Layout.Ring.t) layer =
     let y = y_of_row v ring.y in
     let h = float ring.height *. Style.line_spacing in
-    let event = ref (0, 0.0, []) in
-    C.set_font_size cr Style.big_text;
-    ring |> iter_gc_spans v (fun event' ->
-        let i, t0, stack = !event in
-        let prev_stack = if i = 0 then [] else snd (ring.events.(i - 1)) in
-        event := event';
-        let _, t1, _ = event' in
-        let x0 = View.x_of_time v t0 in
-        let x1 = View.x_of_time v t1 in
-        let w = x1 -. x0 in
-        begin match stack with
-          | [] -> ()
-          | Suspend op :: p ->
-            begin match layer with
+    if y <= v.height && y +. h >= 0. then(
+      let event = ref (0, 0.0, []) in
+      C.set_font_size cr Style.big_text;
+      ring |> iter_gc_spans v (fun event' ->
+          let i, t0, stack = !event in
+          let prev_stack = if i = 0 then [] else snd (ring.events.(i - 1)) in
+          event := event';
+          let _, t1, _ = event' in
+          let x0 = View.x_of_time v t0 in
+          let x1 = View.x_of_time v t1 in
+          let w = x1 -. x0 in
+          begin match stack with
+            | [] -> ()
+            | Suspend op :: p ->
+              begin match layer with
+                | `Bg ->
+                  let g = 0.9 in
+                  C.set_source_rgb cr ~r:g ~g:g ~b:(g /. 2.);
+                  C.rectangle cr ~x:x0 ~y ~w ~h;
+                  C.fill cr
+                | `Fg ->
+                  if p == prev_stack then (
+                    let clip_area = (w -. 0.2, v.height) in
+                    C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+                    C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
+                      ~clip_area
+                  )
+              end
+            | Gc op :: p ->
+              let g = max 0.1 (0.1 *. float (List.length stack)) in
+              match layer with
               | `Bg ->
-                let g = 0.9 in
-                C.set_source_rgb cr ~r:g ~g:g ~b:(g /. 2.);
+                C.set_source_rgb cr ~r:1.0 ~g:g ~b:(g /. 2.);
                 C.rectangle cr ~x:x0 ~y ~w ~h;
                 C.fill cr
               | `Fg ->
                 if p == prev_stack then (
                   let clip_area = (w -. 0.2, v.height) in
-                  C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
+                  if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
+                  else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
                   C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
                     ~clip_area
                 )
-            end
-          | Gc op :: p ->
-            let g = max 0.1 (0.1 *. float (List.length stack)) in
-            match layer with
-            | `Bg ->
-              C.set_source_rgb cr ~r:1.0 ~g:g ~b:(g /. 2.);
-              C.rectangle cr ~x:x0 ~y ~w ~h;
-              C.fill cr
-            | `Fg ->
-              if p == prev_stack then (
-                let clip_area = (w -. 0.2, v.height) in
-                if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
-                else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
-                C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
-                  ~clip_area
-              )
-        end
-      )
+          end
+        )
+    )
 
   let link_domain v cr ~x (fiber : Layout.item) (ring : Layout.Ring.t) =
     let fiber_y = y_of_row v fiber.y +. Style.fiber_padding_top in
