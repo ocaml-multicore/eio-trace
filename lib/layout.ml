@@ -185,10 +185,10 @@ let layout_ring ~duration (ring : Ring.t) =
           );
       );
     make_y_absolute i ring.y;
-    max_y := max !max_y (i.y + i.height - 1);
+    max_y := max !max_y (i.height - 1);
   in
   List.iter visit_domain ring.roots;
-  ring.height <- (!max_y + 1) - ring.y
+  ring.height <- !max_y + 1
 
 let of_trace (trace : Trace.t) =
   let start_time = trace.start_time in
