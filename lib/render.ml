@@ -230,29 +230,47 @@ module Make (C : CANVAS) = struct
     in
     C.paint_text cr ~x:(x +. 2.) ~y:(y +. 8.) ~clip_area:(clip_width -. 2., v.height) label
 
+  let min_render_width = 0.2
+
+  (* Call [fn] for each event in the visible region, plus one on each side (if any).
+     Very close events (at the current zoom level) are skipped.
+     The caller will typically render the region ending in this event. *)
   let iter_gc_spans v fn ring =
     let arr = ring.Layout.Ring.events in
-    let time i = fst arr.(i) in
-    let start = max 0 (find_first arr (fun i -> time i -. v.View.start_time) - 1) in
+    let time_of i = fst arr.(i) in
+    let start = max 0 (find_first arr (fun i -> time_of i -. v.View.start_time) - 1) in
     let stop_time = View.time_of_x v v.width in
-    let stop = find_first arr (fun i -> time i -. stop_time) ~start in
-    for i = start to min stop (Array.length arr - 1) do
-      let time, e = arr.(i) in
-      fn (time, e)
-    done;
+    let stop = min (Array.length arr) (1 + find_first arr (fun i -> time_of i -. stop_time) ~start) in
+    let visible_time = View.timespan_of_width v min_render_width in
+    let rec visit ~prev i =
+      if i < stop then (
+        let time, e = arr.(i) in
+        let next_useful_time = prev +. visible_time in
+        if time < next_useful_time then (
+          let i = find_first arr (fun i -> time_of i -. next_useful_time) ~start:(i + 1) - 1 in
+          let time, e = arr.(i) in
+          fn (i, time, e);
+          visit ~prev:time (i + 1)
+        ) else (
+          fn (i, time, e);
+          visit ~prev:time (i + 1)
+        )
+      )
+    in
+    visit ~prev:(-.visible_time) start;
     if stop = Array.length arr then
-      fn (v.View.layout.duration, [])
+      fn (stop, v.View.layout.duration, [])
 
   let render_gc_events v cr (ring : Layout.Ring.t) layer =
     let y = y_of_row v ring.y in
     let h = float ring.height *. Style.line_spacing in
-    let prev_stack = ref [] in
-    let event = ref (0.0, []) in
+    let event = ref (0, 0.0, []) in
     C.set_font_size cr Style.big_text;
     ring |> iter_gc_spans v (fun event' ->
-        let t0, stack = !event in
+        let i, t0, stack = !event in
+        let prev_stack = if i = 0 then [] else snd (ring.events.(i - 1)) in
         event := event';
-        let t1 = fst event' in
+        let _, t1, _ = event' in
         let x0 = View.x_of_time v t0 in
         let x1 = View.x_of_time v t1 in
         let w = x1 -. x0 in
@@ -266,7 +284,7 @@ module Make (C : CANVAS) = struct
                 C.rectangle cr ~x:x0 ~y ~w ~h;
                 C.fill cr
               | `Fg ->
-                if p == !prev_stack then (
+                if p == prev_stack then (
                   let clip_area = (w -. 0.2, v.height) in
                   C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
                   C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
@@ -281,15 +299,14 @@ module Make (C : CANVAS) = struct
               C.rectangle cr ~x:x0 ~y ~w ~h;
               C.fill cr
             | `Fg ->
-              if p == !prev_stack then (
+              if p == prev_stack then (
                 let clip_area = (w -. 0.2, v.height) in
                 if g < 0.5 then C.set_source_rgb cr ~r:1.0 ~g:1.0 ~b:1.0
                 else C.set_source_rgb cr ~r:0.0 ~g:0.0 ~b:0.0;
                 C.paint_text cr ~x:(x0 +. 2.) ~y:(y +. 12.) op
                   ~clip_area
               )
-        end;
-        prev_stack := stack
+        end
       )
 
   let link_domain v cr ~x (fiber : Layout.item) (ring : Layout.Ring.t) =
