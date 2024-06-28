@@ -81,8 +81,7 @@ let analyse reader =
       match r with
       | Event e -> process_event stats e
       | User _ -> ()
-      | Scheduling Thread_wakeup { cpu; timestamp; id; args = _ } -> ignore (cpu, timestamp, id)
-      | Scheduling Unknown _ -> ()
+      | Scheduling _ -> ()
       | Metadata -> ()
       | Kernel _ -> ()
       | Unknown _ -> ()

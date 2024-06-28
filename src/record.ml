@@ -63,6 +63,16 @@ let callbacks t =
             ~category:"gc"
             ~ts:(Runtime_events.Timestamp.to_int64 ts)
       )
+    ~lifecycle:(fun ring_id ts event _data ->
+        let ts = Runtime_events.Timestamp.to_int64 ts in
+        let thread = ring_thread t ring_id in
+        match event with
+        | EV_DOMAIN_SPAWN ->
+          Write.instant_event t.fxt ~thread ~ts ~name:"domain-spawn" ~category:"ocaml"
+        | EV_DOMAIN_TERMINATE ->
+          Write.instant_event t.fxt ~thread ~ts ~name:"domain-terminate" ~category:"ocaml"
+        | _ -> ()
+      )
     ~lost_events:(fun ring n -> traceln "Warning: ring %d lost %d events" ring n)
   |> Eio_runtime_events.add_callbacks
     (fun ring_id ts e ->
