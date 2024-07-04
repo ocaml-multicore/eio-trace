@@ -1,3 +1,10 @@
+## v0.3
+
+- Ensure ring height is at least 1 (@talex5 #36).  
+  Non-Eio rings that don't have any events didn't get the correct height.
+
+- Optimise redraw (@talex5 #37).
+
 ## v0.2
 
 - Fix staircasing in layout (@talex5 #28).  
