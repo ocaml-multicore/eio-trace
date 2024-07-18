@@ -5,6 +5,12 @@ module Fibers = Map.Make(Int)
 
 module Write = Fxt.Write
 
+type config = {
+  freq : float;
+  cpu : int option;
+  child_args : string list;
+}
+
 type fiber = {
   id : int;
   mutable op : string option;   (* If suspended *)
@@ -199,7 +205,7 @@ let rec get_cursor tmp_dir child =
 
 let ( / ) = Eio.Path.( / )
 
-let run ?ui ?tracefile ~proc_mgr ~fs ~freq args =
+let run ?ui ?tracefile ~proc_mgr ~fs { freq; cpu; child_args } =
   let delay = 1. /. freq in
   let fs = (fs :> Eio.Fs.dir_ty Eio.Path.t) in
   let tracefile = (tracefile :> Eio.Fs.dir_ty Eio.Path.t option) in
@@ -216,7 +222,8 @@ let run ?ui ?tracefile ~proc_mgr ~fs ~freq args =
   Eio.Buf_write.with_flow out @@ fun w ->
   let fxt = Write.of_writer w in
   traceln "Recording to %a" Eio.Path.pp tracefile;
-  let child = spawn_child ~sw ~proc_mgr ~tmp_dir args in
+  let child = spawn_child ~sw ~proc_mgr ~tmp_dir child_args in
+  cpu |> Option.iter (fun cpu -> Processor.Affinity.set_cpus [List.nth Processor.Topology.t cpu]);
   let t = {
     fxt;
     pid = Int64.of_int (Eio.Process.pid child);
@@ -246,3 +253,33 @@ let run ?ui ?tracefile ~proc_mgr ~fs ~freq args =
       (fun () -> Promise.await finished)
       (fun () -> Eio_unix.sleep 1.);
     ui (Eio.Path.native_exn tracefile)
+
+open Cmdliner
+
+let ( $ ) = Term.app
+let ( $$ ) f x = Term.const f $ x
+
+let freq =
+  let doc = "How many times per second to check for events." in
+  Arg.(value @@ opt float 100.0 @@ info ["F"; "freq"] ~docv:"RATE" ~doc)
+
+let cpu =
+  let doc = "CPU for eio-trace" in
+  let parse_cpu s =
+    match Arg.(conv_parser int) s with
+    | Error _ as e -> e
+    | Ok x ->
+      let l = List.length Processor.Topology.t in
+      if x >= 0 && x < l then Ok x
+      else Fmt.error_msg "CPU %d not in range 0..%d" x (l - 1)
+  in
+  let cpu_conv = Arg.conv (parse_cpu, Fmt.int) in
+  Arg.(value @@ opt (some cpu_conv) None @@ info ["cpu"] ~docv:"CPU" ~doc)
+
+let child_args =
+  let doc = "The command to be executed and monitored." in
+  Arg.(non_empty @@ pos_all string [] @@ info [] ~docv:"command" ~doc)
+
+let cmdliner =
+  let make freq cpu child_args = { freq; cpu; child_args } in
+  make $$ freq $ cpu $ child_args
