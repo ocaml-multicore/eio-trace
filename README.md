@@ -179,6 +179,11 @@ There are several ways to fix this:
   They will either appear attached to whatever fiber happens to be running, or shown as domain-level events.
 - The rendering is not optimised yet and may become quite slow on larger traces.
 
+## Real-world example
+
+The [OCaml 5 Performance Problems][perf-blog] blog post shows many ways of examining the behaviour of an Eio program
+using eio-trace and other tools.
+
 [Eio]: https://github.com/ocaml-multicore/eio
 [Perfetto]: https://ui.perfetto.dev/
-
+[perf-blog]: https://roscidus.com/blog/blog/2024/07/22/performance/
