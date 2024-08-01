@@ -86,6 +86,27 @@ eio-trace render trace.fxt
 
 You can also use `--format=png` for PNG output.
 
+To calculate time spent in GC:
+
+```
+eio-trace gc-stats trace.fxt
+
+./trace.fxt:                       
+
+Ring   GC/s     App/s    Total/s   %GC
+  0    0.273    2.258    2.530    10.78
+  1    0.304    0.855    1.159    26.22
+  2    0.301    0.859    1.160    25.98
+  3    0.302    0.859    1.161    26.02
+  4    0.301    0.858    1.159    25.96
+  5    0.300    0.866    1.165    25.72
+  6    0.297    0.873    1.170    25.36
+
+All    2.077    7.427    9.504    21.86
+
+Note: all times are wall-clock and so include time spent blocking.
+```
+
 ## Reading traces
 
 Eio fibers are shown as horizontal bars.

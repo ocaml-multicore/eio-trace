@@ -109,6 +109,7 @@ let cmd env =
     "run",    run ~fs ~proc_mgr              $$ freq $ child_args;
     "show",   show                           $$ tracefiles;
     "render", render                         $$ tracefiles $ imagefile $ fmt $ start_time $ duration;
+    "gc-stats", Gc_stats.main Format.std_formatter $$ (List.map path $$ tracefiles);
   ]
 
 let () =
