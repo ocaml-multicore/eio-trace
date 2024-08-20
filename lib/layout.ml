@@ -168,7 +168,7 @@ let rec make_y_absolute i parent =
     )
 
 let layout_ring ~duration (ring : Ring.t) =
-  let max_y = ref 1 in
+  ring.height <- 1;
   let visit_domain root =
     root.Ring.cc |> Option.iter @@ fun (_ts, (i : item)) ->
     i.y <- 1;
@@ -184,11 +184,10 @@ let layout_ring ~duration (ring : Ring.t) =
             i.end_cc_label <- child.end_cc_label;
           );
       );
+    ring.height <- max ring.height (i.height + i.y);
     make_y_absolute i ring.y;
-    max_y := max !max_y (i.height - 1);
   in
-  List.iter visit_domain ring.roots;
-  ring.height <- !max_y + 1
+  List.iter visit_domain ring.roots
 
 let of_trace (trace : Trace.t) =
   let start_time = trace.start_time in
