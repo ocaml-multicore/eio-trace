@@ -1,4 +1,4 @@
 (executable
   (public_name eio-trace)
   (name main)
-  (libraries eio_main eio_trace cmdliner fxt))
+  (libraries eio_main eio_trace cmdliner fxt processor))

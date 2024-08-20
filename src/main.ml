@@ -27,10 +27,6 @@ let fmt =
   in
   Arg.(value @@ opt (some formats) None @@ info ["T"; "format"] ~docv:"TYPE" ~doc)
 
-let freq =
-  let doc = "How many times per second to check for events." in
-  Arg.(value @@ opt float 100.0 @@ info ["F"; "freq"] ~docv:"RATE" ~doc)
-
 let start_time =
   let doc = "Seconds to skip before the section to display." in
   Arg.(value @@ opt (some time) None @@ info ["s"; "start-time"] ~doc)
@@ -39,10 +35,6 @@ let duration =
   let doc = "Width of the output image in seconds." in
   Arg.(value @@ opt (some time) None @@ info ["d"; "duration"] ~doc)
 
-let child_args =
-  let doc = "The command to be executed and monitored." in
-  Arg.(non_empty @@ pos_all string [] @@ info [] ~docv:"command" ~doc)
-    
 let eio_trace_gtk = "eio-trace-gtk"
 
 let find_eio_trace_gtk () =
@@ -66,16 +58,16 @@ let exec_gtk args =
 
 let show tracefiles = exec_gtk ("show" :: tracefiles)
 
-let run ~fs ~proc_mgr freq args =
+let run ~fs ~proc_mgr config =
   let gtk_exe = find_eio_trace_gtk () in
   let ui tracefile =
-    Eio.Process.run proc_mgr (gtk_exe :: "run" :: tracefile :: args);
+    Eio.Process.run proc_mgr (gtk_exe :: "run" :: tracefile :: config.Record.child_args);
     Ok ()
   in
-  Record.run ~fs ~proc_mgr ~freq ~ui args
+  Record.run ~fs ~proc_mgr ~ui config
 
-let record ~fs ~proc_mgr freq tracefile args =
-  Record.run ~fs ~proc_mgr ~freq ~tracefile args
+let record ~fs ~proc_mgr tracefile config =
+  Record.run ~fs ~proc_mgr ~tracefile config
     
 let ( let* ) = Result.bind
 
@@ -104,9 +96,9 @@ let cmd env =
   let path = Eio.Path.( / ) fs in
   Cmd.group (Cmd.info "eio-trace")
   @@ List.map (fun (name, term) -> Cmd.v (Cmd.info name) term) [
-    "record", record ~fs ~proc_mgr           $$ freq $ (path $$ tracefile) $ child_args;
+    "record", record ~fs ~proc_mgr           $$ (path $$ tracefile) $ Record.cmdliner;
     "dump",   Dump.main Format.std_formatter $$ (List.map path $$ tracefiles);
-    "run",    run ~fs ~proc_mgr              $$ freq $ child_args;
+    "run",    run ~fs ~proc_mgr              $$ Record.cmdliner;
     "show",   show                           $$ tracefiles;
     "render", render                         $$ tracefiles $ imagefile $ fmt $ start_time $ duration;
     "gc-stats", Gc_stats.main Format.std_formatter $$ (List.map path $$ tracefiles);

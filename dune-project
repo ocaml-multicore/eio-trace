@@ -11,6 +11,7 @@
  (synopsis "Trace visualisation for Eio programs")
  (depends
   (ocaml (>= 5.1.0))
+  processor
   (eio_main (>= 0.14))
   (cmdliner (>= 1.2.0))
   (lablgtk3 (>= 3.1.4))
