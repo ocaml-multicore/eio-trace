@@ -1,3 +1,16 @@
+## v0.4
+
+- Add `--cpu` option (@talex5 #41).  
+  Useful to avoid running eio-trace on the same CPU as the program being traced.
+
+- Fix ring height calculation (again) (@talex5 #42).
+
+- Link to performance problems blog post (@talex5 #40).  
+  Gives examples showing uses of eio-trace and other tools.
+
+- Add `gc-stats` sub-command (@talex5 #39).  
+  Report about time spent in GC for a recorded trace.
+
 ## v0.3
 
 - Ensure ring height is at least 1 (@talex5 #36).  
