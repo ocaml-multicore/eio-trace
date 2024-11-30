@@ -99,7 +99,9 @@ let add_activation item ts x =
 
 let set_fiber t ring ts id =
   let d = get_ring t ring in
-  current_fiber t ring |> Option.iter (fun old -> add_activation old ts `Pause);
+  current_fiber t ring |> Option.iter (fun old ->
+      if old.end_time = None then add_activation old ts `Pause
+    );
   d.current_fiber <- Some id;
   let f = get t id in
   add_activation f ts (`Fiber id)
