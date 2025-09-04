@@ -11,6 +11,15 @@ To install eio-trace:
 opam install eio-trace
 ```
 
+It can also be built and run using Nix:
+
+```
+nix run github:ocaml-multicore/eio-trace
+```
+
+Note that for recording you'll want to compile eio-trace with the same version of OCaml
+that the program being traced is using.
+
 ### macOS
 
 These instructions will walk you through installing the system dependencies necessary in order to install eio-trace's dependencies from OPAM.
